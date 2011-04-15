@@ -4,7 +4,7 @@ freekey: It's freaky easy to manage your passwords.
 freekey is intended to some day be an easy way to manage all of your
 passwords.
 
-http://groups.google.com/groups/freekey-list
+        http://groups.google.com/groups/freekey-list
 
 
 Design Goals
