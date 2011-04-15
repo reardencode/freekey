@@ -6,7 +6,7 @@ from Crypto.Hash import SHA256
 UPPER = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
 LOWER = 'abcdefghijklmnopqrstuvwxyz'
 NUM   = '0123456789'
-PUNC  = '`~!@#$%^&*()-_=+[]{}\\|;:\'",<.>/?'
+PUNC  = ''.join(sorted('`~!@#$%^&*()-_=+[]{}\\|;:\'",<.>/?'))
 
 def charstring(upper=True, lower=True, num=True, punc=PUNC):
     if isinstance(punc, basestring):
