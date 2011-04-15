@@ -27,11 +27,11 @@ class Config:
     u'hash'
     >>> try:
     ...     c.a = 'b'
+    ...     c.a
     ... except ValueError:
     ...     pass
     >>> shutil.rmtree(p)
     '''
-    __slots__ = ('d')
 
     def __init__(self, configpath):
         self.path = configpath
