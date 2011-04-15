@@ -1,21 +1,19 @@
 import json, os
 
-allowed = set(('usepwd', 'type', 'path', 'chars'))
+allowed = set(('usepwd', 'type', 'path', 'chars', 'backer'))
 defaults = {
         'usepwd': True,
         'type': 'random',
-        'path': os.path.join(os.environ['HOME'], '.freekey'),
         'chars': {},
+        'backer': { 'class': 'DiskBacker' }
         }
 
 class Config:
     '''Simple configuration container.
 
-    >>> import tempfile
-    >>> f, p = tempfile.mkstemp()
-    >>> os.close(f)
-    >>> defaults['path'] = p
-    >>> c = Config()
+    >>> import tempfile, shutil
+    >>> p = tempfile.mkdtemp()
+    >>> c = Config(os.path.join(p,'rc'))
     >>> c.type
     'random'
     >>> c.chars
@@ -23,29 +21,29 @@ class Config:
     >>> c.type = 'hash'
     >>> c.type
     'hash'
-    c.save()
-    >>> c = Config()
+    >>> c.save()
+    >>> c = Config(os.path.join(p, 'rc'))
     >>> c.type
     u'hash'
     >>> try:
     ...     c.a = 'b'
-    >>> except ValueError:
+    ... except ValueError:
     ...     pass
+    >>> shutil.rmtree(p)
     '''
     __slots__ = ('d')
 
-    def __init__(self):
-        config = os.path.join(defaults['path'], 'rc')
-        if os.path.is_file(config):
-            with open(config, 'r') as f:
-                d = simplejson.load(f)
+    def __init__(self, configpath):
+        self.path = configpath
+        if os.path.isfile(self.path):
+            with open(self.path, 'r') as f:
+                d = json.load(f)
                 self.__dict__ = dict((k,v) for k,v in d.items() if k in allowed)
 
     def save(self):
-        if not os.path.is_dir(defaults['path']):
-            os.mkdir(defaults['path'])
-        config = os.path.join(defaults['path'], 'rc')
-        with open(config, 'w') as f:
+        if not os.path.isdir(os.path.dirname(self.path)):
+            os.mkdir(os.path.dirname(self.path))
+        with open(self.path, 'w') as f:
             json.dump(self.__dict__, f)
 
     def __getattr__(self, attr):
@@ -60,3 +58,6 @@ class Config:
         else:
             raise ValueError, '%s not allowed' % attr
 
+if __name__ == '__main__':
+    import doctest
+    doctest.testmod()
