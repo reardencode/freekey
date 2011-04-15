@@ -94,7 +94,7 @@ class PackFile:
 
     def _write_pack(self, final=False):
         with self.lock:
-            if final:
+            if final and self.timer:
                 self.timer.cancel()
                 self.timer = None
             if self.dirty and (final or time.time()-self.dirty > 5):
