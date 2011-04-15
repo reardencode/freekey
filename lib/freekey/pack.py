@@ -57,10 +57,9 @@ class PackFile:
                 self.raw_pack = raw_pack[4+keylen:]
 
     def close(self):
-        if self.initialized:
-            self._write_pack(True)
-            self.pack = None
-            self.initialized = False
+        self._write_pack(True)
+        self.pack = None
+        self.initialized = False
 
     def __del__(self):
         self.close()
@@ -95,12 +94,12 @@ class PackFile:
 
     def _write_pack(self, final=False):
         with self.lock:
-            if self.dirty and (final or time.time()-self.dirty > 5):
-                self.backer.writepack(self._updated_pack())
-                self.dirty = None
             if final:
                 self.timer.cancel()
                 self.timer = None
+            if self.dirty and (final or time.time()-self.dirty > 5):
+                self.backer.writepack(self._updated_pack())
+                self.dirty = None
             if self.timer:
                 self.timer = Timer(5, self._write_pack)
                 self.timer.start()
