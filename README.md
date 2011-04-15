@@ -21,6 +21,14 @@ Design Goals
  - Tested code
 
 
+Dependencies
+------------
+
+ - Python 2.7 (I think, does it run on lower versions?)
+ - Pycrypto
+ - Boto
+
+
 What's Done
 -----------
 
