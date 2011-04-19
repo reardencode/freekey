@@ -14,6 +14,7 @@
 >>> c = Config(os.path.join(p, 'rc'))
 >>> c.type
 u'hash'
+>>> c.backer.fulldict()['secret_key']
 >>> shutil.rmtree(p)
 '''
 
@@ -30,8 +31,11 @@ CONFIG = {
             'punc': (PUNC, PUNC),
             },
         'backer': {
-            'class': (frozenset(('DiskBacker', 'S3Backer')), 'DiskBacker'),
-            'path': (basestring, None),
+            'clz': (frozenset(('DiskBacker', 'S3Backer')), 'DiskBacker'),
+            'path': (basestring, os.path.join(os.environ['HOME'], 'freekey')),
+            'bucket': (basestring, 'freekey'),
+            'access_key': (basestring, None),
+            'secret_key': (basestring, None),
             },
         }
 
@@ -44,7 +48,7 @@ def makeConfig(name, config):
         return fget
     def fset_f(t, attr):
         def fset(self, v):
-            assert(isinstance(v, t))
+            assert(v is None or isinstance(v, t))
             setattr(self, attr, v)
         return fset
     def fsetstr_f(vals, attr):
@@ -79,7 +83,7 @@ def makeConfig(name, config):
             prop = property(fget_f(attr), fsetstr_f(v[0], attr))
         else:
             raise AttributeError, '%s invalid typedef' % v[0]
-        if isinstance(v, tuple) and v[1] is not None:
+        if isinstance(v, tuple):
             defaults[attr] = v[1]
             savethese.append((k,attr))
         attrs[k] = prop
@@ -112,6 +116,15 @@ def makeConfig(name, config):
                 d[k] = v
         return d
     attrs['todict'] = todict
+
+    def fulldict(self):
+        d = {}
+        for k,_ in savethese:
+            d[k] = getattr(self, k)
+        for k,_ in recursethese:
+            d[k] = getattr(self, k).fulldict()
+        return d
+    attrs['fulldict'] = fulldict
 
     def save(self):
         if not os.path.isdir(os.path.dirname(self._path)):
