@@ -1,3 +1,4 @@
+import os
 from freekey.encryption_manager import EncryptionManager
 from freekey.config import Config
 from freekey.pack import PackFile
@@ -5,10 +6,11 @@ from freekey.passwords import hashpass, randompass
 
 class Application:
 
-    def __init__(self):
+    def __init__(self, basepath):
         self.em = EncryptionManager()
-        self.config = Config()
-        self.pack = PackFile(self.config.path)
+        self.config = Config(os.path.join(basepath, 'rc'))
+        bc = __import__('freekey.backers', fromlist=[self.config.backer.clz])
+        self.pack = PackFile(bc(**self.config.backer.fulldict()))
         if not self.config.usepwd:
             self.em.loadkey(self.pack.key)
 

@@ -31,6 +31,7 @@ CONFIG = {
             'punc': (PUNC, PUNC),
             },
         'backer': {
+            'expire_seconds': (int, 60*60*24*7*2),
             'clz': (frozenset(('DiskBacker', 'S3Backer')), 'DiskBacker'),
             'path': (basestring, os.path.join(os.environ['HOME'], 'freekey')),
             'bucket': (basestring, 'freekey'),
@@ -75,7 +76,7 @@ def makeConfig(name, config):
             attrs[attr] = makeConfig(k, v)
             prop = property(fget_f(attr))
             recursethese.append((k,attr))
-        elif v[0] in (bool, basestring):
+        elif v[0] in (int, bool, basestring):
             prop = property(fget_f(attr), fset_f(v[0], attr))
         elif isinstance(v[0], frozenset):
             prop = property(fget_f(attr), fsetset_f(v[0], attr))
