@@ -47,7 +47,7 @@ def _pass(source, length, chars, require):
         entropy_needed *= len(CTS[ct])
         nfull -= 1
     entropy_needed *= len(full) ** nfull
-    nbytes = int(math.ceil(math.log(entropy_needed, 256)))
+    nbytes = int(math.ceil(math.log(entropy_needed, 2 ** 8)))
     entropy = 0L
     for byte in islice(source, nbytes):
         entropy = entropy * (2 ** 8) + ord(byte)
