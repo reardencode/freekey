@@ -34,6 +34,8 @@ class PackFile:
     >>> from freekey.encryption_manager import EncryptionManager
     >>> from freekey.passwords import randompass
     >>> import glob, tempfile
+    >>> from freekey.config import Config
+    >>> c = Config().chars
     >>> d = tempfile.mkdtemp()
     >>> backer = DiskBacker(d, 100)
     >>> em = EncryptionManager()
@@ -41,7 +43,7 @@ class PackFile:
     >>> pf = PackFile(backer)
     >>> pf.init(em)
     >>> k = 'jd@example.com'
-    >>> p = randompass()
+    >>> p = randompass(10, c, ())
     >>> v = {'site': 'example.com', 'username': 'jd', 'password': p}
     >>> pf.set(k, v)
     >>> v2 = pf.get(k)
@@ -51,7 +53,7 @@ class PackFile:
     >>> pf = PackFile(backer)
     >>> pf.init(em)
     >>> k3 = 'bb@example.org'
-    >>> p3 = randompass()
+    >>> p3 = randompass(10, c, ())
     >>> v3 = {'site': 'example.org', 'username': 'bb', 'version': 0}
     >>> pf.set(k3, v3)
     >>> v4 = pf.get(k3)

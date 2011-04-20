@@ -19,17 +19,22 @@ u'hash'
 '''
 
 import json, os
-from freekey.passwords import PUNC
+from freekey.passwords import CTS
+
+PUNC = CTS['punc']
 
 CONFIG = {
         'usepwd': (bool, True),
-        'type': (frozenset(('random', 'hash')), 'random'),
+        'type': (frozenset(('random', 'hash', 'manual')), 'random'),
         'chars': {
             'upper': (bool, 'True'),
             'lower': (bool, 'True'),
             'num': (bool, 'True'),
             'punc': (PUNC, PUNC),
             },
+        'require': (('punc', 'num', 'lower', 'upper'),
+            ['punc', 'num', 'lower', 'upper']),
+        'length': (int, 10),
         'backer': {
             'expire_seconds': (int, 60*60*24*7*2),
             'clz': (frozenset(('DiskBacker', 'S3Backer')), 'DiskBacker'),
@@ -51,6 +56,13 @@ def makeConfig(name, config):
         def fset(self, v):
             assert(v is None or isinstance(v, t))
             setattr(self, attr, v)
+        return fset
+    def fsettup_f(vals, attr):
+        vals = frozenset(vals)
+        def fset(self, v):
+            v2 = [x for x in sorted(v) if x in vals]
+            assert(len(v)==len(v2))
+            setattr(self, attr, v2)
         return fset
     def fsetstr_f(vals, attr):
         vals = frozenset(vals)
@@ -82,6 +94,8 @@ def makeConfig(name, config):
             prop = property(fget_f(attr), fsetset_f(v[0], attr))
         elif isinstance(v[0], basestring):
             prop = property(fget_f(attr), fsetstr_f(v[0], attr))
+        elif isinstance(v[0], tuple):
+            prop = property(fget_f(attr), fsettup_f(v[0], attr))
         else:
             raise AttributeError, '%s invalid typedef' % v[0]
         if isinstance(v, tuple):

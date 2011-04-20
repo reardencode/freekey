@@ -17,8 +17,16 @@ class Application:
     def authenticate(self, passphrase):
         self.em.loadkey(self.pack.key, passphrase)
 
-    def hashpass(self, site, username=None, length=10):
-        p = hashpass(self.config.chars, em, site, username, length)
+    def randompass(self, length=None, chars=None):
+        chars = chars or self.config.chars
+        length = length or self.config.length
+        return randompass(chars, self.em, length)
+
+    def hashpass(self, site, username=None, version=0, length=None, chars=None):
+        chars = chars or self.config.chars
+        length = length or self.config.length
+        username = username or self.config.username
+        return hashpass(self.em, site, username, version, length, chars)
 
 
 if __name__ == '__main__':
