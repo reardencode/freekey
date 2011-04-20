@@ -33,7 +33,7 @@ class PackFile:
     >>> from freekey.backers import DiskBacker
     >>> from freekey.encryption_manager import EncryptionManager
     >>> from freekey.passwords import randompass
-    >>> import tempfile
+    >>> import glob, tempfile
     >>> d = tempfile.mkdtemp()
     >>> backer = DiskBacker(d, 100)
     >>> em = EncryptionManager()
@@ -65,6 +65,10 @@ class PackFile:
     >>> pf.remove(k3)
     >>> pf.get(k3)
     >>> pf.close()
+    >>> map(os.path.basename, glob.glob(os.path.join(d, '*')))
+    ['pack.1', 'pack.2', 'pack.3']
+    >>> map(os.path.basename, glob.glob(os.path.join(d, '.lock')))
+    ['.lock']
     >>> shutil.rmtree(d)
     '''
 
