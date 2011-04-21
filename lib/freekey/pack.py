@@ -1,4 +1,4 @@
-import mmap, os, shutil, struct, time
+import json, mmap, os, shutil, struct, time
 from threading import Lock, Timer
 
 class Value:
@@ -118,7 +118,7 @@ class PackFile:
     def _load_pack(self, packfile):
         idxlen = struct.unpack('!I', packfile.read(4))[0]
         idx = self.em.decrypt(packfile.read(idxlen))
-        return dict((k, self._unpack(packfile)) for k in idx)
+        return dict((tuple(json.loads(k)), self._unpack(packfile)) for k in idx)
 
     def _start_timer(self):
         '''Call while holding lock'''
@@ -203,7 +203,7 @@ class PackFile:
         for k, v in pack.iteritems():
             if isinstance(v, Tombstone):
                 continue
-            yield k, struct.pack('!H', len(v.val)) + v.val
+            yield json.dumps(k), struct.pack('!H', len(v.val)) + v.val
 
     def _updated_pack(self):
         key = self.em.stored_key()

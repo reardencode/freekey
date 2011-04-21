@@ -7,6 +7,8 @@
 'random'
 >>> c.chars
 {}
+>>> c['chars']
+{}
 >>> c.type = 'hash'
 >>> c.type
 'hash'
@@ -35,10 +37,11 @@ CONFIG = {
         'require': (('punc', 'num', 'lower', 'upper'),
             ['punc', 'num', 'lower', 'upper']),
         'length': (int, 10),
+        'username': (basestring, None),
         'backer': {
             'expire_seconds': (int, 60*60*24*7*2),
             'clz': (frozenset(('DiskBacker', 'S3Backer')), 'DiskBacker'),
-            'path': (basestring, os.path.join(os.environ['HOME'], 'freekey')),
+            'path': (basestring, os.path.join(os.environ['HOME'], '.freekey')),
             'bucket': (basestring, 'freekey'),
             'access_key': (basestring, None),
             'secret_key': (basestring, None),
@@ -118,6 +121,9 @@ def makeConfig(name, config):
                     setattr(self, k, d[k])
     attrs['__init__'] = __init__
 
+    attrs['__setitem__'] = lambda self, k, v: setattr(self, k, v)
+    attrs['__getitem__'] = lambda self, k: getattr(self, k)
+
     def todict(self):
         d = {}
         for k,attr in savethese:
@@ -149,7 +155,7 @@ def makeConfig(name, config):
     attrs['save'] = save
 
     attrs['__repr__'] = lambda self: repr(self.todict())
-    attrs['__str__'] = lambda self: str(self.todict())
+    attrs['__str__'] = lambda self: json.dumps(self.fulldict(), indent=2)
 
     return type(name, (object,), attrs)
 

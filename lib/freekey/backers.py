@@ -60,7 +60,7 @@ class DiskBacker(Backer):
         self.pack_base = os.path.join(path, 'pack')
         self.lock_name = os.path.join(path, '.lock')
         if not os.path.isdir(path):
-            os.path.makedirs(path)
+            os.makedirs(path)
 
     def _mtime(self, fn):
         return os.stat(fn).st_mtime

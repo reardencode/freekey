@@ -1,4 +1,4 @@
-import math, random, urlparse
+import math, random
 from itertools import cycle, islice, chain
 from Crypto import Random
 from Crypto.Hash import SHA256
@@ -20,23 +20,6 @@ def charstring(chars):
         yield d['punc']
 
     return list(chain(*g_chars()))
-
-def simplify(url):
-    '''Take a URL and simplify it to a domain w/o www.
-
-    >>> simplify('https://online.citibank.com/US/JPS/portal/Index.do')
-    'online.citibank.com'
-    >>> simplify('https://www.wellsfargo.com/')
-    'wellsfargo.com'
-    >>> simplify('www.wellsfargo.com/somesite')
-    'wellsfargo.com'
-    '''
-    if not url.find('://') >= 0:
-        url = 'http://' + url
-    domain = urlparse.urlparse(url)[1]
-    if domain.startswith('www.'):
-        return domain[4:]
-    return domain
 
 def _pass(source, length, chars, require):
     full = charstring(chars)
@@ -74,24 +57,19 @@ def hashpass(em, site, username, version, length, chars, require):
     >>> c = Config().chars
     >>> em = EncryptionManager()
     >>> _ = em.newkey('Somepass')
-    >>> p = hashpass(em, 'reardencode.com/someurl', None, 0, 10, c, ())
+    >>> p = hashpass(em, 'reardencode.com', None, 0, 10, c, ())
     >>> len(p)
     10
-    >>> p2 = hashpass(em, 'http://www.reardencode.com', None, 0, 10, c, ())
-    >>> p == p2
-    True
-    >>> p3 = hashpass(em, 'reardencode.com', 'hank', 0, 10, c, ())
-    >>> p3 == p2
+    >>> p2 = hashpass(em, 'reardencode.com', 'hank', 0, 10, c, ())
+    >>> p2 == p
     False
-    >>> p4 = hashpass(em, 'reardencode.com', None, 1, 10, c, ())
-    >>> p4 == p2
+    >>> p3 = hashpass(em, 'reardencode.com', None, 1, 10, c, ())
+    >>> p3 == p
     False
-    >>> p5 = hashpass(em, 'reardencode.com', None, 0, 10, c, ('num',))
-    >>> p5 == p2
+    >>> p4 = hashpass(em, 'reardencode.com', None, 0, 10, c, ('num',))
+    >>> p4 == p
     False
     '''
-    if site.find('/') >= 0:
-        site = simplify(site)
     if username:
         v = '%s %s %d' % (site, username, version)
     else:
