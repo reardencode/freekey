@@ -1,7 +1,8 @@
 import math, random
 from itertools import cycle, islice, chain
-from Crypto import Random
+from Crypto.Random import get_random_bytes
 from Crypto.Hash import SHA256
+from Crypto.Util.number import bytes_to_long
 
 CTS = {
         'upper' : 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
@@ -21,6 +22,13 @@ def charstring(chars):
 
     return list(chain(*g_chars()))
 
+def _words(num):
+    words = 0
+    while num:
+        num >>= 32
+        words += 1
+    return words
+
 def _pass(source, length, chars, require):
     full = charstring(chars)
     nfull = length
@@ -30,10 +38,7 @@ def _pass(source, length, chars, require):
         entropy_needed *= len(CTS[ct])
         nfull -= 1
     entropy_needed *= len(full) ** nfull
-    nbytes = int(math.ceil(math.log(entropy_needed, 2 ** 8)))
-    entropy = 0L
-    for byte in islice(source, nbytes):
-        entropy = entropy * (2 ** 8) + ord(byte)
+    entropy = bytes_to_long(source(4 * _words(entropy_needed)))
     positions = range(length)
     special = {}
     for ct in require:
@@ -74,13 +79,12 @@ def hashpass(em, site, username, version, length, chars, require):
         v = '%s %s %d' % (site, username, version)
     else:
         v = '%s %d' % (site, version)
-    source = cycle(em._raw_encrypt(SHA256.new(v).digest()))
+    def source(length):
+        hashbytes = em._raw_encrypt(SHA256.new(v).digest())
+        while length > len(hashbytes):
+            hashbytes += hashbytes
+        return hashbytes[:length]
     return _pass(source, length, chars, require)
-
-def random_bytes():
-    r = Random.new()
-    while True:
-        yield r.read(1)
 
 def randompass(length, chars, require):
     '''Make a random password between min and max length.
@@ -105,8 +109,7 @@ def randompass(length, chars, require):
     ...         print 'Found'
     Found
     '''
-    source = random_bytes()
-    return _pass(source, length, chars, require)
+    return _pass(get_random_bytes, length, chars, require)
 
 if __name__ == '__main__':
     import doctest
