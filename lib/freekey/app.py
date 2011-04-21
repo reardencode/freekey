@@ -124,10 +124,11 @@ class FreeKeyCmd(cmd.Cmd):
         self._reapp()
 
     def _reapp(self):
+        if hasattr(self, 'app') and self.app: self.app.close()
         self.app = Application(os.path.join(os.environ['HOME'], '.freekey'))
 
     def onecmd(self, line):
-        if not line or line in ('exit', 'EOF', 'config'):
+        if not line or line.split(' ')[0] in ('exit', 'EOF', 'config', 'help'):
             return cmd.Cmd.onecmd(self, line)
         if not line.startswith('init') and self.app.needs_init():
             print "\nPlease run the init command first"
@@ -138,22 +139,32 @@ class FreeKeyCmd(cmd.Cmd):
         return cmd.Cmd.onecmd(self, line)
 
     def do_new(self, line):
+        '''new site [username]
+-- Make a new password for the (site, username).
+site: may not contain spaces, typically a domain or URL
+username: optional, defaults to configured value (which may be empty)'''
         parts = line.split(' ')
         if not parts or len(parts) > 2:
             print "One or two arguments (site and username) expected"
             return
         site = parts[0]
-        username = len(parts) > 1 and parts[1] or None
+        username = len(parts) > 1 and parts[1] or self.app.config.username
         PasswordCmd(self.app, site, username).cmdloop()
 
     def do_config(self, _):
+        '''config
+-- Enter the configuration interface.'''
         ConfigCmd(self.app.config).cmdloop()
         self._reapp()
 
     def do_list(self, _):
-        print self.app.keylist()
+        '''list
+-- Print the keys for all configured passwords.'''
+        print '\n'.join('%40s %s' % k for k in self.app.keylist())
 
     def do_auth(self, _):
+        '''auth
+-- Authenticate with the repository.'''
         if not self.app.needs_auth():
             print "I don't need authentication"
         else:
@@ -163,15 +174,21 @@ class FreeKeyCmd(cmd.Cmd):
             self.app.authenticate(pw)
 
     def do_get(self, line):
+        '''get site [username]
+-- Get the password for a (site, username)
+site: may not contain spaces, typically a domain or URL
+username: optional, defaults to configured value (which may be empty)'''
         parts = line.split(' ')
         if not parts or len(parts) > 2:
             print "One or two arguments (site and username) expected"
             return
         site = parts[0]
-        username = len(parts) > 1 and parts[1] or None
+        username = len(parts) > 1 and parts[1] or self.app.config.username
         print self.app.pack.get((site, username))
 
     def do_init(self, _):
+        '''init
+-- Initialize a new repository.'''
         if not self.app.needs_init():
             print "Already initialized, remove all packs and try again"
         else:
