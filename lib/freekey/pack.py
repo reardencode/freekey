@@ -8,6 +8,9 @@ class Value:
     def merge(self, other):
         return other
 
+    def orig(self):
+        return self.val
+
 class Tombstone(Value):
     def merge(self, other):
         if self.val == other.val:
@@ -25,6 +28,9 @@ class Updated(Value):
         if self.val == other.val:
             return other
         return Updated(self.val, other.val)
+
+    def orig(self):
+        return self.old
 
 class PackFile:
     '''
@@ -214,10 +220,17 @@ class PackFile:
                 struct.pack('!I', len(idx)) + idx, ''.join(data)))
 
     def set(self, key, value):
-        data = self.em.encrypt(value)
         with self.lock:
-            if key in self.pack:
-                self.pack[key] = Updated(data)
+            exists = key in self.pack
+            if exists:
+                old_data = self.pack[key].orig()
+                old_value = self.em.decrypt(old_data)
+                if old_value == value:
+                    self.pack[key] = Value(old_data)
+                    return
+            data = self.em.encrypt(value)
+            if exists:
+                self.pack[key] = Updated(data, old_data)
             else:
                 self.pack[key] = Value(data)
             self.dirty = time.time()
@@ -225,7 +238,7 @@ class PackFile:
     def remove(self, key):
         with self.lock:
             if key in self.pack:
-                self.pack[key] = Tombstone(self.pack[key].val)
+                self.pack[key] = Tombstone(self.orig())
             self.dirty = time.time()
 
     def get(self, key):
