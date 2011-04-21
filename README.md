@@ -1,11 +1,17 @@
 freekey: It's freaky easy to manage your passwords.
 =======================
 
-freekey is intended to some day be an easy way to manage all of your
-passwords.
+freekey is an easy way to manage all of your passwords.
 
         http://groups.google.com/groups/freekey-list
 
+
+Status
+------
+
+ - The CLI is technically kinda usable.
+ - The pack file format is subject to backward incompatible changes
+ - The configuration file is subject to backward incompatible changes
 
 Design Goals
 ------------
@@ -37,6 +43,7 @@ What's Done
  - Some backer (storage disk/S3) stuff
  - Some storage format stuff
  - Some testing
+ - A rudimentary CLI
 
 
 What Needs Doing
