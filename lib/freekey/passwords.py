@@ -110,7 +110,3 @@ def randompass(length, chars, require):
     Found
     '''
     return _pass(get_random_bytes, length, chars, require)
-
-if __name__ == '__main__':
-    import doctest
-    doctest.testmod()

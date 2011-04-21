@@ -6,7 +6,7 @@ declare -i total=0
 declare -i failed=0
 for file in lib/freekey/[a-z]*.py; do
     echo -n "$file... "
-    python $file
+    python -m doctest $file
     if [ $? ]; then
         echo "done"
     else

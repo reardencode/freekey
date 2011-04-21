@@ -247,7 +247,3 @@ class PackFile:
         if v and not isinstance(v, Tombstone):
             return self.em.decrypt(v.val)
         return None
-        
-if __name__ == '__main__':
-    import doctest
-    doctest.testmod()

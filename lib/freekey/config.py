@@ -160,7 +160,3 @@ def makeConfig(name, config):
     return type(name, (object,), attrs)
 
 Config = makeConfig('Config', CONFIG)
-
-if __name__ == '__main__':
-    import doctest
-    doctest.testmod()

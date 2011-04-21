@@ -102,7 +102,3 @@ class EncryptionManager:
         length = struct.unpack('!I', val[:4])[0]
         val = val[4:4+length]
         return json.loads(val)
-
-if __name__ == '__main__':
-    import doctest
-    doctest.testmod()
