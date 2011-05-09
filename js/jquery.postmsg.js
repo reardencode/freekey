@@ -38,7 +38,6 @@
 
     var _init = function() {
         if (_bound) return;
-        console.log("Setting up event listener...");
         if (window.addEventListener) {
             window.addEventListener("message", _receive, false);
         } else if (window.attachEvent) {
@@ -58,8 +57,6 @@
 
     $.postmsg = {
         send: function(target, origin, type, data, callbacks) {
-            if (!origin) $.error("Origin is required for security reasons");
-//            if (origin === 'null') origin = '*';
             var msg = {data:data, type:type};
             var base = JSON.stringify(msg);
             callbacks = callbacks || {};
@@ -67,7 +64,7 @@
                 msg.okcb = _makecb(base, callbacks.success);
             if (callbacks.error)
                 msg.errcb = _makecb(base, callbacks.error);
-            if ("postMessage" in target) {
+            if ('postMessage' in target) {
                 target.postMessage(JSON.stringify(msg), origin);
             } else {
                 $.error("No postMessage on target");
@@ -76,7 +73,6 @@
 
         listen: function(origin, type, fn) {
             _init();
-            console.log("Adding listener");
             _listeners[type] = _listeners[type] || [];
             _listeners[type].push({call:fn, origin:origin});
         },
