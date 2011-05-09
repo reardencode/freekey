@@ -26,8 +26,8 @@ function freekey_init_container() {
     // Else
     //   Display form to input password, bucket and credentials
     //   Encrypt credentials to localStorage
-
     // Post self to AWS
+
     // Hide all non-iframe content
     // Embiggen iframe
     // Load self into iframe from AWS
@@ -35,6 +35,37 @@ function freekey_init_container() {
 }
 function freekey_init_iframe(key, rc) {
     $('#awesome').html(sjcl.codec.base64.fromBits(key)+'<br/>'+JSON.stringify(rc));
+    var bucket = new S3Bucket(rc.s3_bucket, rc.aws_access, rc.aws_secret);
+    var html = $('html').html();
+    var md5 = sjcl.codec.hex.fromBits(sjcl.hash.md5.hash(html));
+    $('#main').load(function() {
+        console.log("Post completed");
+        // Setup listener to return credentials
+    });
+    var form = $('#awsform');
+    form.attr('action', bucket.origin());
+    form.attr('method', 'post');
+    var key = 'index.html';
+    var expires = new Date();
+    expires.setTime(expires.getTime() + 5000);
+    var policy = {
+        "expiration": expires,
+        "conditions": [
+            {bucket: bucket.bucket },
+            {key: key},
+            {'Content-Type': 'text/html'},
+            ['starts-with', '$redirect', bucket.origin()]
+        ]
+    };
+    policy = sjcl.codec.base64.fromBits(
+            sjcl.codec.utf8String.toBits(JSON.stringify(policy)));
+    document.awsform.key.value = key;
+    document.awsform.policy.value = policy;
+    document.awsform.file.value = html;
+    document.awsform.AWSAccessKeyId.value = bucket.access_key;
+    document.awsform.signature.value = bucket.sign(policy);
+    document.awsform.redirect.value = bucket.uri(key, 120);
+    form.submit();
 }
 function freekey_auth() {
     console.log("freekey_auth");
@@ -99,32 +130,56 @@ function S3Bucket(bucket, access_key, secret_key) {
     this.bucket = bucket;
     this.access_key = access_key;
     this.secret_key = secret_key;
-    this.authString = function(resource, verb, md5, type, amzheaders) {
-        parts = [];
+}
+
+S3Bucket.prototype = {
+    origin: function() {
+        return 'https://' + this.bucket + '.s3.amazonaws.com';
+    },
+    uri: function(resource, expires) {
+        var ds = Math.round(new Date().getTime()/1000) + (expires || 0);
+        return this.origin() + '/' + resource +
+            '?AWSAccessKeyId=' + this.access_key + '&Expires=' + ds +
+            '&Signature=' + this.authString(resource, ds);
+    },
+    sign: function(data) {
+        var hm = new sjcl.misc.hmac(sjcl.codec.utf8String.toBits(this.secret_key), sjcl.hash.sha1);
+        return sjcl.codec.base64.fromBits(hm.encrypt(data));
+    },
+    authHeader: function(resource, verb, md5, type, amzheaders) {
+        var ds = new Date().toUTCString();
+        var code = this.authString(resource, ds, verb, md5, type, amzheaders);
+        return 'AWS ' + this.access_key + ':' + code;
+            
+    },
+    authString: function(
+            resource, dateString, verb, md5, type, amzheaders) {
+        var parts = [];
         parts.push(verb || 'GET');
         parts.push(md5 || '');
         parts.push(type || '');
-        parts.push(new Date().toUTCString());
+        parts.push(dateString);
         amzheaders = amzheaders || {}
-        can_amzheaders = {}
+        var can_amzheaders = {}
         for (key in amzheaders) {
             can_amzheaders[key.toLowerCase()] = amzheaders[key];
         }
-        keys = [];
+        var keys = [];
         for (key in can_amzheaders) keys.push(key);
         keys.sort();
         for (key in keys) {
             parts.push(key+':'+can_amzheaders[key]);
         }
-        parts.push(resource);
-        hm = new sjcl.misc.hmac(this.secret_key, sjcl.hash.sha1);
-        code = sjcl.codec.base64.fromBits(hm.encrypt(parts.join('\n')));
-        return 'AWS ' + this.access_key + ':' + code;
-    }
-    this.put = function(key, data) {
-        $.ajax('http://' + this.bucket + ".s3.amazonaws.com/" + key, {
+        parts.push('/' + this.bucket + '/' + resource);
+        var hm = new sjcl.misc.hmac(
+                sjcl.codec.utf8String.toBits(this.secret_key), sjcl.hash.sha1);
+        console.log("Signing", parts.join('\n'));
+        return sjcl.codec.base64.fromBits(hm.encrypt(parts.join('\n')));
+    },
+    put: function(key, data) {
+        $.ajax(this.origin(), {
             type: 'POST',
-            headers: {'Authorization': this.authString('/' + key) },
+            headers: {'Authorization': this.authHeader('/' + key) },
             error: function(data) {
                 console.log("Error");
                 console.log(data);
@@ -134,13 +189,13 @@ function S3Bucket(bucket, access_key, secret_key) {
                 console.log(data);
             }
         });
-    }
-    this.set_policy = function(policy) {
+    },
+    set_policy: function(policy) {
         alert("Not implemented");
-    }
-    this.get = function(key) {
-        $.ajax('http://' + this.bucket + ".s3.amazonaws.com/" + key, {
-            headers: {'Authorization': this.authString('/' + key) },
+    },
+    get: function(key) {
+        $.ajax(this.origin(), {
+            headers: {'Authorization': this.authHeader('/' + key) },
                 error: function(data) {
                 console.log("Error");
                 console.log(data);
@@ -151,7 +206,7 @@ function S3Bucket(bucket, access_key, secret_key) {
             }
         });
     }
-}
+};
         </script>
         <style>
             div.init { display: none; }
@@ -190,6 +245,17 @@ function S3Bucket(bucket, access_key, secret_key) {
                     <input type="button" name="start" value="Start FreeKey"
                            onClick="freekey_auth();"/>
                 </div>
+            </form>
+        </div>
+        <div class='init'>
+            <form name='awsform' id='awsform' target='main' enctype='multipart/form-data'>
+                <input type='hidden' name='key'/>
+                <input type='hidden' name='AWSAccessKeyId'/>
+                <input type='hidden' name='policy'/>
+                <input type='hidden' name='signature'/>
+                <input type='hidden' name='redirect'/>
+                <input type='hidden' name='Content-Type' value='text/html'/>
+                <input type='textarea' name='file'/>
             </form>
         </div>
         <div id='awesome'></div>
