@@ -1,129 +1,143 @@
 <html>
     <head>
         <script type="text/javascript">
-function freekey_init_container() {
-    $('.init input').keypress(function(e) {
-        if (e.which === '13') {
-            console.log("enter intercept");
-            $(this).parents('form')('input:button').click();
+"use strict";
+window.freekey_init = {
+    container: function() {
+        $(document.auth_form).submit(function(e) {
+            $(this).submit(function(e) { return false; });
+            freekey_init.auth();
             return false;
+        });
+        $(document.conf_form).submit(function(e) {
+            $(this).submit(function(e) { return false; });
+            freekey_init.conf();
+            return false;
+        });
+        $('#loading').show();
+        var json = localStorage.getItem('freekey-rc');
+        $('.init').fadeOut();
+        if (json) {
+            JSON.parse(json);
+            $('#auth').fadeIn();
+        } else {
+            $('#conf').fadeIn();
         }
-        return true;
-    });
-    $('#loading').show();
-    var json = localStorage.getItem('freekey-rc');
-    $('.init').fadeOut();
-    if (json) {
-        JSON.parse(json);
-        $('#auth').fadeIn();
-    } else {
-        $('#conf').fadeIn();
+        /* -If exists
+         * -  Display form to input password 
+         * -    with link to change bucket and credentials
+         * -  Decrypt credentials
+         * -Else
+         * -  Display form to input password, bucket and credentials
+         * -  Encrypt credentials to localStorage
+         * -Post self to AWS
+         * Hide all non-iframe content
+         * Embiggen iframe
+         * -Load self into iframe from AWS
+         * -Set loaded listener to return credentials
+         */
+    },
+    iframe: function(key, rc) {
+        var bucket = new S3Bucket(rc.s3_bucket, rc.aws_access, rc.aws_secret);
+        var s3key = 'index.html';
+        $('#main').load(function() {
+            $(this).unbind('load');
+            console.log("Loaded iframe");
+            $.postmsg.listen(
+                bucket.origin(), 'loaded', function() {return [key, bucket];});
+            this.contentWindow.location = bucket.uri(s3key, 120);
+        });
+        var html = '<html>' + $('html').html() + '</html>';
+        var form = $('#awsform');
+        form.attr('action', bucket.origin());
+        form.attr('method', 'post');
+        var expires = new Date();
+        expires.setTime(expires.getTime() + 5000);
+        var policy = {
+            "expiration": expires,
+            "conditions": [
+                {bucket: bucket.bucket },
+                {key: s3key},
+                {'Content-Type': 'text/html'},
+                {'redirect': 'http://www.google.com'}
+            ]
+        };
+        policy = sjcl.codec.base64.fromBits(
+                sjcl.codec.utf8String.toBits(JSON.stringify(policy)));
+        document.awsform.key.value = s3key;
+        document.awsform.policy.value = policy;
+        document.awsform.file.value = html;
+        document.awsform.AWSAccessKeyId.value = bucket.access_key;
+        document.awsform.signature.value = bucket.sign(policy);
+        document.awsform.redirect.value = 'http://www.google.com';
+        console.log("Posting self to aws");
+        form.submit();
+    },
+    auth: function() {
+        try {
+            var erc = JSON.parse(localStorage.getItem('freekey-rc'));
+            var pass = document.auth_form.authpass.value;
+            var key = sjcl.misc.pbkdf2(pass, erc.salt, 10000, 256);
+            var ciph = new sjcl.cipher.aes(key);
+            var pt = sjcl.mode.ccm.decrypt(ciph, erc.value, erc.iv);
+            var json = sjcl.codec.utf8String.fromBits(pt);
+            var rc = JSON.parse(json);
+            $('.init').fadeOut();
+            $('#loading').show();
+            freekey_init.iframe(key, rc);
+        } catch (ex) {
+            console.log(ex);
+            freekey_init.container();
+        }
+    },
+    conf: function() {
+        try {
+            var pass = document.conf_form.passphrase.value;
+            if (pass !== document.conf_form.passphrase2.value) {
+                $.error("Passwords do not match");
+                freekey_init.container();
+            }
+            var rc = {
+                s3_bucket: document.conf_form.s3_bucket.value,
+                aws_access: document.conf_form.aws_access.value,
+                aws_secret: document.conf_form.aws_secret.value
+            };
+            var erc = {
+                salt: sjcl.random.randomWords(2,0),
+                iv: sjcl.random.randomWords(4,0)
+            };
+            var key = sjcl.misc.pbkdf2(pass, erc.salt, 10000, 256);
+            var ciph = new sjcl.cipher.aes(key);
+            var json = JSON.stringify(rc);
+            var pt = sjcl.codec.utf8String.toBits(json);
+            erc.value = sjcl.mode.ccm.encrypt(ciph, pt, erc.iv);
+            localStorage.setItem('freekey-rc', JSON.stringify(erc));
+            $('.init').fadeOut();
+            $('#loading').show();
+            freekey_init.iframe(key, rc);
+        } catch (ex) {
+            console.log(ex);
+            freekey_init.container();
+        }
+    },
+    start: function() {
+        if (window == window.top) {
+            freekey_init.container();
+        } else {
+            $.postmsg.send(window.top, '*', 'loaded', '',
+                    {success: freekey_init.finish});
+        }
+    },
+    finish: function(data) {
+        var bucket =
+            new S3Bucket(data.bucket, data.access_key, datat.secret_key);
+        freekey = new FreeKey(bucket);
+        console.log("FreeKey initialized");
     }
-    // If exists
-    //   Display form to input password 
-    //     with link to change bucket and credentials
-    //   Decrypt credentials
-    // Else
-    //   Display form to input password, bucket and credentials
-    //   Encrypt credentials to localStorage
-    // Post self to AWS
+};
 
-    // Hide all non-iframe content
-    // Embiggen iframe
-    // Load self into iframe from AWS
-    // Set loaded listener to return credentials
-}
-function freekey_init_iframe(key, rc) {
-    $('#awesome').html(sjcl.codec.base64.fromBits(key)+'<br/>'+JSON.stringify(rc));
-    var bucket = new S3Bucket(rc.s3_bucket, rc.aws_access, rc.aws_secret);
-    var html = $('html').html();
-    var md5 = sjcl.codec.hex.fromBits(sjcl.hash.md5.hash(html));
-    $('#main').load(function() {
-        console.log("Post completed");
-        // Setup listener to return credentials
-    });
-    var form = $('#awsform');
-    form.attr('action', bucket.origin());
-    form.attr('method', 'post');
-    var key = 'index.html';
-    var expires = new Date();
-    expires.setTime(expires.getTime() + 5000);
-    var policy = {
-        "expiration": expires,
-        "conditions": [
-            {bucket: bucket.bucket },
-            {key: key},
-            {'Content-Type': 'text/html'},
-            ['starts-with', '$redirect', bucket.origin()]
-        ]
-    };
-    policy = sjcl.codec.base64.fromBits(
-            sjcl.codec.utf8String.toBits(JSON.stringify(policy)));
-    document.awsform.key.value = key;
-    document.awsform.policy.value = policy;
-    document.awsform.file.value = html;
-    document.awsform.AWSAccessKeyId.value = bucket.access_key;
-    document.awsform.signature.value = bucket.sign(policy);
-    document.awsform.redirect.value = bucket.uri(key, 120);
-    form.submit();
-}
-function freekey_auth() {
-    console.log("freekey_auth");
-    try {
-        var erc = JSON.parse(localStorage.getItem('freekey-rc'));
-        var pass = document.auth_form.authpass.value;
-        var key = sjcl.misc.pbkdf2(pass, erc.salt, 10000, 256);
-        var ciph = new sjcl.cipher.aes(key);
-        var pt = sjcl.mode.ccm.decrypt(ciph, erc.value, erc.iv);
-        var json = sjcl.codec.utf8String.fromBits(pt);
-        var rc = JSON.parse(json);
-        $('.init').fadeOut();
-        $('#loading').show();
-        freekey_init_iframe(key, rc);
-    } catch (ex) {
-        console.log(ex);
-        freekey_init_container();
-    }
-}
-function freekey_conf() {
-    console.log("freekey_conf");
-    try {
-        var pass = document.conf_form.passphrase.value;
-        if (pass !== document.conf_form.passphrase2.value) {
-            $.error("Passwords do not match");
-            freekey_init_container();
-        }
-        var rc = {
-            s3_bucket: document.conf_form.s3_bucket.value,
-            aws_access: document.conf_form.aws_access.value,
-            aws_secret: document.conf_form.aws_secret.value
-        };
-        var erc = {
-            salt: sjcl.random.randomWords(2,0),
-            iv: sjcl.random.randomWords(4,0)
-        };
-        var key = sjcl.misc.pbkdf2(pass, erc.salt, 10000, 256);
-        var ciph = new sjcl.cipher.aes(key);
-        var json = JSON.stringify(rc);
-        var pt = sjcl.codec.utf8String.toBits(json);
-        erc.value = sjcl.mode.ccm.encrypt(ciph, pt, erc.iv);
-        console.log(erc.value);
-        localStorage.setItem('freekey-rc', JSON.stringify(erc));
-        $('.init').fadeOut();
-        $('#loading').show();
-        freekey_init_iframe(key, rc);
-    } catch (ex) {
-        console.log(ex);
-        freekey_init_container();
-    }
-}
-function freekey_init() {
-    if (window == window.top) {
-        freekey_init_container();
-    } else {
-        $.postmsg.send(window.top, '*', 'loaded', '',
-                {success: freekey_init_iframe});
-    }
+function FreeKey(bucket) {
+    this.bucket = bucket;
 }
 
 function S3Bucket(bucket, access_key, secret_key) {
@@ -138,9 +152,10 @@ S3Bucket.prototype = {
     },
     uri: function(resource, expires) {
         var ds = Math.round(new Date().getTime()/1000) + (expires || 0);
+        var code = this.authString(resource, ds);
         return this.origin() + '/' + resource +
-            '?AWSAccessKeyId=' + this.access_key + '&Expires=' + ds +
-            '&Signature=' + this.authString(resource, ds);
+            '?AWSAccessKeyId=' + encodeURIComponent(this.access_key) +
+            '&Expires=' + ds + '&Signature=' + encodeURIComponent(code);
     },
     sign: function(data) {
         var hm = new sjcl.misc.hmac(sjcl.codec.utf8String.toBits(this.secret_key), sjcl.hash.sha1);
@@ -159,8 +174,8 @@ S3Bucket.prototype = {
         parts.push(md5 || '');
         parts.push(type || '');
         parts.push(dateString);
-        amzheaders = amzheaders || {}
-        var can_amzheaders = {}
+        amzheaders = amzheaders || {};
+        var can_amzheaders = {};
         for (key in amzheaders) {
             can_amzheaders[key.toLowerCase()] = amzheaders[key];
         }
@@ -173,7 +188,6 @@ S3Bucket.prototype = {
         parts.push('/' + this.bucket + '/' + resource);
         var hm = new sjcl.misc.hmac(
                 sjcl.codec.utf8String.toBits(this.secret_key), sjcl.hash.sha1);
-        console.log("Signing", parts.join('\n'));
         return sjcl.codec.base64.fromBits(hm.encrypt(parts.join('\n')));
     },
     put: function(key, data) {
@@ -231,20 +245,14 @@ S3Bucket.prototype = {
                 <div class='init_input'><input type="password" name="passphrase" value=""/></div>
                 <div class='init_label'><label for="passphrase2">Pass phrase (again):</label></div>
                 <div class='init_input'><input type="password" name="passphrase2" value=""/></div>
-                <div class="init_button">
-                    <input type="button" name="start" value="Start FreeKey"
-                           onClick="freekey_conf();"/>
-                </div>
+                <div class="init_button"><input type="submit" name="start" value="Start FreeKey"/></div>
             </form>
         </div>
         <div class='init' id='auth'>
             <form name='auth_form'>
                 <div class='init_label'><label for="authpass">Pass phrase:</label></div>
                 <div class='init_input'><input type="password" name="authpass" value=""/></div>
-                <div class="init_button">
-                    <input type="button" name="start" value="Start FreeKey"
-                           onClick="freekey_auth();"/>
-                </div>
+                <div class="init_button"><input type="submit" name="start" value="Start FreeKey"/></div>
             </form>
         </div>
         <div class='init'>
@@ -321,7 +329,7 @@ sjcl.hash.sha256.hash(this.d.concat(a));this.v=new sjcl.cipher.aes(this.d);for(a
 a.clientX||a.offsetX,a.y||a.clientY||a.offsetY],2,"mouse")},p:function(){sjcl.random.addEntropy(new Date,2,"loadtime")},K:function(a,b){var c;a=sjcl.random.u[a];var d=[];for(c in a)a.hasOwnProperty(c)&&d.push(a[c]);for(c=0;c<d.length;c++)d[c](b)}};
         </script>
         <script type='text/javascript'>
-$(document).ready(function() { freekey_init(); });
+$(document).ready(function() { freekey_init.start(); });
         </script>
     </body>
 </html>
