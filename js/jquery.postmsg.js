@@ -4,6 +4,7 @@
     var _bound = false;
 
     var _receive = function(e) {
+        console.log('_receive', e);
         try {
             var msg = JSON.parse(e.data);
         } catch (ex) {
@@ -57,6 +58,7 @@
 
     $.postmsg = {
         send: function(target, origin, type, data, callbacks) {
+            _init();
             var msg = {data:data, type:type};
             var base = JSON.stringify(msg);
             callbacks = callbacks || {};
