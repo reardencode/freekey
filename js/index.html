@@ -118,6 +118,8 @@ window.freekey_init = {
         } else {
             $('#init').hide();
             $('.main').show();
+            var origin = window.location.origin;
+            if (origin === 'file://') origin = '*'; /* Hate this a bit */
             $.postmsg.send(window.top, '*', 'loaded', undefined,
                     {success: freekey_init.finish});
         }
