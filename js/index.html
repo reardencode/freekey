@@ -37,7 +37,7 @@ window.freekey_init = {
                 {bucket: bucket.bucket },
                 {key: s3key},
                 {'Content-Type': 'text/html'},
-                {'redirect': 'http://www.example.com'}
+                {'redirect': bucket.origin()}
             ]
         };
         policy = sjcl.codec.base64.fromBits(
@@ -47,8 +47,9 @@ window.freekey_init = {
         document.awsform.file.value = html;
         document.awsform.AWSAccessKeyId.value = bucket.access_key;
         document.awsform.signature.value = bucket.sign(policy);
-        document.awsform.redirect.value = 'http://www.example.com';
+        document.awsform.redirect.value = bucket.origin();
         form.submit();
+        document.awsform.file.value = '';
     },
     auth: function() {
         try {
@@ -117,7 +118,7 @@ window.freekey_init = {
         } else {
             $('#init').hide();
             $('.main').show();
-            $.postmsg.send(window.top, '*', 'loaded', '',
+            $.postmsg.send(window.top, '*', 'loaded', undefined,
                     {success: freekey_init.finish});
         }
     },
@@ -215,12 +216,14 @@ S3Bucket.prototype = {
     },
     putJson: function(key, data, success, error) {
         var ct = 'application/json';
-        var md5 = sjcl.codec.hex.fromBits(sjcl.hash.md5.hash(data));
+        var md5 = sjcl.codec.base64.fromBits(sjcl.hash.md5.hash(data));
         var verb = 'PUT';
+        var headers = this.authHeaders(key, verb, md5, ct);
+        headers['Content-MD5'] = md5;
         $.ajax(this.origin() + '/' + key, {
             type: verb,
             contentType: ct,
-            headers: this.authHeaders(key, verb, '', ct),
+            headers: headers,
             data: data,
             success: success,
             error: error
