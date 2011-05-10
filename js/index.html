@@ -3,27 +3,9 @@
         <script type="text/javascript">
 "use strict";
 window.freekey_init = {
-    container: function() {
-        $(document.auth_form).submit(function(e) {
-            $(this).submit(function(e) { return false; });
-            freekey_init.auth();
-            return false;
-        });
-        $(document.conf_form).submit(function(e) {
-            $(this).submit(function(e) { return false; });
-            freekey_init.conf();
-            return false;
-        });
-        var json = localStorage.getItem('freekey-rc');
-        if (json) {
-            JSON.parse(json);
-            $('#auth').slideDown();
-        } else {
-            $('#conf').slideDown();
-        }
-    },
     iframe: function(key, rc) {
         $('.init').slideUp();
+        $('#init_error').slideUp();
         $('#loading').slideDown();
         var bucket = new S3Bucket(rc.s3_bucket, rc.aws_access, rc.aws_secret);
         var s3key = 'index.html';
@@ -32,7 +14,7 @@ window.freekey_init = {
             this.style.height = '100%';
             this.style.width = '100%';
             $.postmsg.listen(bucket.origin(), 'loaded', function() {
-                $('.init').hide();
+                $('#init').hide();
                 $('body').css('padding',0).css('margin', 0);
                 $('#main').fadeIn();
                 return [key, bucket];
@@ -79,16 +61,19 @@ window.freekey_init = {
             var rc = JSON.parse(json);
             freekey_init.iframe(key, rc);
         } catch (ex) {
-            console.log(ex);
-            freekey_init.container();
+            if (ex.toString().indexOf('CORRUPT: ') === 0) {
+                $('#init_error').html('Incorrect password');
+            } else {
+                $('#init_error').html(ex.toString());
+            }
         }
     },
     conf: function() {
         try {
             var pass = document.conf_form.passphrase.value;
             if (pass !== document.conf_form.passphrase2.value) {
-                $.error("Passwords do not match");
-                freekey_init.container();
+                $('#init_error').html('Passwords do not match');
+                return;
             }
             var rc = {
                 s3_bucket: document.conf_form.s3_bucket.value,
@@ -107,15 +92,30 @@ window.freekey_init = {
             localStorage.setItem('freekey-rc', JSON.stringify(erc));
             freekey_init.iframe(key, rc);
         } catch (ex) {
-            console.log(ex);
-            freekey_init.container();
+            $('#init_error').html(ex.toString());
         }
     },
     start: function() {
         if (window == window.top) {
-            freekey_init.container();
+            $(document.auth_form).submit(function(e) {
+                $(this).submit(function(e) { return false; });
+                freekey_init.auth();
+                return false;
+            });
+            $(document.conf_form).submit(function(e) {
+                $(this).submit(function(e) { return false; });
+                freekey_init.conf();
+                return false;
+            });
+            var json = localStorage.getItem('freekey-rc');
+            if (json) {
+                JSON.parse(json);
+                $('#auth').slideDown();
+            } else {
+                $('#conf').slideDown();
+            }
         } else {
-            $('.init').hide();
+            $('#init').hide();
             $('.main').show();
             $.postmsg.send(window.top, '*', 'loaded', '',
                     {success: freekey_init.finish});
@@ -125,12 +125,38 @@ window.freekey_init = {
         var key = data[0];
         var b = data[1];
         var bucket = new S3Bucket(b.bucket, b.access_key, b.secret_key);
-        window.freekey = new FreeKey(bucket);
-        console.log("FreeKey initialized");
+        window.freekey = new FreeKey(key, bucket);
+        var log = function(data) {
+            console.log(data);
+        };
+        var getback = function(data) {
+            console.log('getback', data);
+            bucket.get('pack', log, log);
+        };
+        bucket.putJson('pack', JSON.stringify({"a":0}), getback, log);
     }
 };
 
-function FreeKey(bucket) {
+function FreeKeyPack(bucket) {
+    this.bucket = bucket;
+}
+
+FreeKeyPack.prototype = {
+    _sortf: function(a, b) {
+        return Number(a.split('.')[1]) - Number(b.split('.')[1]);
+    },
+    writepack: function(data) {
+        this.uuid = sjcl.codecs.base64.fromBits(sjcl.random.randomWords(4, 0));
+
+        var now = new Date().getTime();
+        var l = this.bucket.list('pack.');
+        l.sort(this._sortf);
+    },
+
+};
+
+function FreeKey(key, bucket) {
+    this.key = key;
     this.bucket = bucket;
 }
 
@@ -155,63 +181,59 @@ S3Bucket.prototype = {
         var hm = new sjcl.misc.hmac(sjcl.codec.utf8String.toBits(this.secret_key), sjcl.hash.sha1);
         return sjcl.codec.base64.fromBits(hm.encrypt(data));
     },
-    authHeader: function(resource, verb, md5, type, amzheaders) {
-        var ds = new Date().toUTCString();
-        var code = this.authString(resource, ds, verb, md5, type, amzheaders);
-        return 'AWS ' + this.access_key + ':' + code;
-            
+    authHeaders: function(resource, verb, md5, type, amzheaders) {
+        amzheaders = amzheaders || {};
+        amzheaders['X-Amz-Date'] = new Date().toUTCString();
+        var code = this.authString(resource, '', verb, md5, type, amzheaders);
+        amzheaders['Authorization'] = 'AWS ' + this.access_key + ':' + code;
+        return amzheaders;
     },
     authString: function(
             resource, dateString, verb, md5, type, amzheaders) {
+        var key;
         var parts = [];
         parts.push(verb || 'GET');
         parts.push(md5 || '');
         parts.push(type || '');
         parts.push(dateString);
         amzheaders = amzheaders || {};
-        var can_amzheaders = {};
+        var lc_amzheaders = {};
         for (key in amzheaders) {
-            can_amzheaders[key.toLowerCase()] = amzheaders[key];
+            lc_amzheaders[key.toLowerCase()] = amzheaders[key];
         }
         var keys = [];
-        for (key in can_amzheaders) keys.push(key);
+        for (key in lc_amzheaders) keys.push(key);
         keys.sort();
-        for (key in keys) {
-            parts.push(key+':'+can_amzheaders[key]);
+        for (var i=0; i<keys.length; i++) {
+            key = keys[i];
+            parts.push(key+':'+lc_amzheaders[key]);
         }
         parts.push('/' + this.bucket + '/' + resource);
         var hm = new sjcl.misc.hmac(
                 sjcl.codec.utf8String.toBits(this.secret_key), sjcl.hash.sha1);
         return sjcl.codec.base64.fromBits(hm.encrypt(parts.join('\n')));
     },
-    put: function(key, data) {
-        $.ajax(this.origin(), {
-            type: 'POST',
-            headers: {'Authorization': this.authHeader('/' + key) },
-            error: function(data) {
-                console.log("Error");
-                console.log(data);
-            },
-            success: function(data) {
-                console.log("Success");
-                console.log(data);
-            }
+    putJson: function(key, data, success, error) {
+        var ct = 'application/json';
+        var md5 = sjcl.codec.hex.fromBits(sjcl.hash.md5.hash(data));
+        var verb = 'PUT';
+        $.ajax(this.origin() + '/' + key, {
+            type: verb,
+            contentType: ct,
+            headers: this.authHeaders(key, verb, '', ct),
+            data: data,
+            success: success,
+            error: error
         });
     },
     set_policy: function(policy) {
         alert("Not implemented");
     },
-    get: function(key) {
-        $.ajax(this.origin(), {
-            headers: {'Authorization': this.authHeader('/' + key) },
-                error: function(data) {
-                console.log("Error");
-                console.log(data);
-            },
-                success: function(data) {
-                console.log("Success");
-                console.log(data);
-            }
+    get: function(key, success, error) {
+        $.ajax(this.origin() + '/' + key, {
+            headers: this.authHeaders(key),
+            success: success,
+            error: error
         });
     }
 };
@@ -219,48 +241,52 @@ S3Bucket.prototype = {
         <style>
             div.init { display: none; }
             div.main { display: none; }
-            div.init_button { width: 20em; text-align: center; clear: both;}
+            div.init_button { width: 20em; text-align: center; clear: both; }
             div.init_label { width: 8em; clear: left; float: left; }
             div.init_input { width: 12em; clear: right; float: left; }
-            #main { border: none; margin: 0; padding: 0; display: none; };
+            #main { border: none; margin: 0; padding: 0; display: none; }
+            #init_error { color: #a02020; }
         </style>
     </head>
     <body>
-        <div class='init' id='loading'>
-            Loading FreeKey...
-        </div>
-        <div class='init' id='conf'>
-            <form name='conf_form'>
-                <div class='init_label'><label for="s3_bucket">S3 Bucket:</label></div>
-                <div class='init_input'><input type="text" name="s3_bucket" value=""/></div>
-                <div class='init_label'><label for="aws_access">AWS Access Key:</label></div>
-                <div class='init_input'><input type="text" name="aws_access" value=""/></div>
-                <div class='init_label'><label for="aws_secret">AWS Secret Key:</label></div>
-                <div class='init_input'><input type="password" name="aws_secret" value=""/></div>
-                <div class='init_label'><label for="passphrase">Pass phrase:</label></div>
-                <div class='init_input'><input type="password" name="passphrase" value=""/></div>
-                <div class='init_label'><label for="passphrase2">Pass phrase (again):</label></div>
-                <div class='init_input'><input type="password" name="passphrase2" value=""/></div>
-                <div class="init_button"><input type="submit" name="start" value="Start FreeKey"/></div>
-            </form>
-        </div>
-        <div class='init' id='auth'>
-            <form name='auth_form'>
-                <div class='init_label'><label for="authpass">Pass phrase:</label></div>
-                <div class='init_input'><input type="password" name="authpass" value=""/></div>
-                <div class="init_button"><input type="submit" name="start" value="Start FreeKey"/></div>
-            </form>
-        </div>
-        <div class='init'>
-            <form name='awsform' id='awsform' target='main' enctype='multipart/form-data'>
-                <input type='hidden' name='key'/>
-                <input type='hidden' name='AWSAccessKeyId'/>
-                <input type='hidden' name='policy'/>
-                <input type='hidden' name='signature'/>
-                <input type='hidden' name='redirect'/>
-                <input type='hidden' name='Content-Type' value='text/html'/>
-                <input type='textarea' name='file'/>
-            </form>
+        <div id='init'>
+            <div id='init_error'></div>
+            <div class='init' id='loading'>
+                Loading FreeKey...
+            </div>
+            <div class='init' id='conf'>
+                <form name='conf_form'>
+                    <div class='init_label'><label for="s3_bucket">S3 Bucket:</label></div>
+                    <div class='init_input'><input type="text" name="s3_bucket" value=""/></div>
+                    <div class='init_label'><label for="aws_access">AWS Access Key:</label></div>
+                    <div class='init_input'><input type="text" name="aws_access" value=""/></div>
+                    <div class='init_label'><label for="aws_secret">AWS Secret Key:</label></div>
+                    <div class='init_input'><input type="password" name="aws_secret" value=""/></div>
+                    <div class='init_label'><label for="passphrase">Pass phrase:</label></div>
+                    <div class='init_input'><input type="password" name="passphrase" value=""/></div>
+                    <div class='init_label'><label for="passphrase2">Pass phrase (again):</label></div>
+                    <div class='init_input'><input type="password" name="passphrase2" value=""/></div>
+                    <div class="init_button"><input type="submit" name="start" value="Start FreeKey"/></div>
+                </form>
+            </div>
+            <div class='init' id='auth'>
+                <form name='auth_form'>
+                    <div class='init_label'><label for="authpass">Pass phrase:</label></div>
+                    <div class='init_input'><input type="password" name="authpass" value=""/></div>
+                    <div class="init_button"><input type="submit" name="start" value="Start FreeKey"/></div>
+                </form>
+            </div>
+            <div class='init'>
+                <form name='awsform' id='awsform' target='main' enctype='multipart/form-data'>
+                    <input type='hidden' name='key'/>
+                    <input type='hidden' name='AWSAccessKeyId'/>
+                    <input type='hidden' name='policy'/>
+                    <input type='hidden' name='signature'/>
+                    <input type='hidden' name='redirect'/>
+                    <input type='hidden' name='Content-Type' value='text/html'/>
+                    <input type='textarea' name='file'/>
+                </form>
+            </div>
         </div>
         <iframe id='main'>FreeKey requires iFrames.</iframe>
         <div class='main'>
