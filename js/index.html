@@ -37,6 +37,10 @@ window.freekey_init = {
                 $('#main').fadeIn();
                 return [key, bucket];
             });
+            window.onbeforeunload = function() {
+                return "Are you sure you want to leave?  You will need to" +
+                    " reenter your password to continue using FreeKey.";
+            };
             this.contentWindow.location = bucket.uri(s3key, 120);
         });
         var html = '<html>' + $('html').html() + '</html>';
@@ -113,9 +117,6 @@ window.freekey_init = {
         } else {
             $('.init').hide();
             $('.main').show();
-            window.onbeforeunload = function() {
-                return "Are you sure you want to leave?  You will need to reenter your password to continue using FreeKey.";
-            };
             $.postmsg.send(window.top, '*', 'loaded', '',
                     {success: freekey_init.finish});
         }
