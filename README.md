@@ -9,47 +9,12 @@ freekey is an easy way to manage all of your passwords.
 Status
 ------
 
- - The CLI is technically kinda usable.
- - The pack file format is subject to backward incompatible changes
- - The configuration file is subject to backward incompatible changes
-
-Design Goals
-------------
-
- - Good security, but not paranoid
- - Portable simple storage format
- - Compatible with (at least) Linux and Mac
- - Hash (of user@domain + version), random, or manual passwords
- - Easy cloud backing (S3, Dropbox)
- - Simple GUI
- - Clipboard integration
- - Clean maintainable code
- - Tested code
-
-
-Dependencies
-------------
-
- - Python 2.7 (I think, does it run on lower versions?)
- - Pycrypto
- - Boto
-
-
-What's Done
------------
-
- - Some encryption stuff
- - Some password generation stuff
- - Some backer (storage disk/S3) stuff
- - Some storage format stuff
- - Some testing
- - A rudimentary CLI
-
-
-What Needs Doing
-----------------
-
- - GUI - I'm going to try creating one in Kivy soon
- - Security auditing by people who understand that better than me
- - Clipboard integration
- - Build/deploy/dependency stuff - I've never done this before
+ - Undergoing rewrite from python installable application to completely
+   downloadable and/or web loadable HTML/Javascript application.  You can check
+   out the progress of this in the js subdir.  Eventually I'll rearrange to
+   make that the primary.
+ - The JavaScript version is intended to be a complete password manager that
+   can be copied as a single HTML file to any device.  AWS credentials are
+   stored in HTML5 localStorage, passwords are stored on S3 using the same
+   scheme described in the debrecated README.old.md file.
+ 
