@@ -4,7 +4,6 @@
     var _bound = false;
 
     var _receive = function(e) {
-        console.log('_receive', e);
         try {
             var msg = JSON.parse(e.data);
         } catch (ex) {
