@@ -2,19 +2,27 @@
     <head>
         <script type="text/javascript">
 "use strict";
+function freekey_status(message) {
+    if (message) {
+        $('#status').html(message).fadeIn();
+    } else {
+        $('#status').fadeOut(400, function(){$(this).html('');});
+    }
+}
 function freekey_start(data) {
+    freekey_status("Loading...");
     var key = data[0];
     var b = data[1];
     var bucket = new S3Bucket(b.bucket, b.access_key, b.secret_key);
     window.freekey = new FreeKey(key, bucket);
-    var log = function(data) {
+/*    var log = function(data) {
         console.log(data);
     };
     var getback = function(data) {
         console.log('getback', data);
         bucket.get('pack', log, log);
     };
-    bucket.putJson('pack', JSON.stringify({"a":0}), getback, log);
+    bucket.putJson('pack', JSON.stringify({"a":0}), getback, log);*/
 }
 
 function FreeKeyPack(bucket) {
@@ -38,7 +46,45 @@ FreeKeyPack.prototype = {
 function FreeKey(key, bucket) {
     this.key = key;
     this.bucket = bucket;
+    this.init();
 }
+
+FreeKey.prototype = {
+    init: function() {
+        var fk = this;
+        this.bucket.list(
+                'pack.', function(data){fk.init_list(data);}, freekey_status);
+    },
+    sync: function() {
+        var fk = this;
+        freekey_status("Sync called");
+        setTimeout(function(){fk.sync();}, 5000);
+    },
+    initialized: function() {
+        var fk = this;
+        freekey_status();
+        setTimeout(function(){fk.sync();}, 5000);
+    },
+    init_list: function(data) {
+        var fk = this;
+        var key = $(data).find('Contents Key').last().text();
+        if (key) {
+            this.bucket.get(
+                    key, function(data){fk.init_load(data);}, freekey_status);
+        } else {
+            this.pack = {version: 0, contents: {}};
+            this.initialized();
+        }
+    },
+    init_load: function(data) {
+        var fk = this;
+        if (pack.version !== 0) {
+            freekey_status("Newer FreeKey used on repo, upgrade first.");
+        }
+        this.pack = data;
+        this.initialized();
+    }
+};
 
 function S3Bucket(bucket, access_key, secret_key) {
     this.bucket = bucket;
@@ -62,6 +108,7 @@ S3Bucket.prototype = {
         return sjcl.codec.base64.fromBits(hm.encrypt(data));
     },
     authHeaders: function(resource, verb, md5, type, amzheaders) {
+        resource = resource || '';
         amzheaders = amzheaders || {};
         amzheaders['X-Amz-Date'] = new Date().toUTCString();
         var code = this.authString(resource, '', verb, md5, type, amzheaders);
@@ -117,17 +164,38 @@ S3Bucket.prototype = {
             success: success,
             error: error
         });
+    },
+    list: function(prefix, success, error) {
+        var headers = this.authHeaders();
+        var qs = prefix?'?prefix=' + encodeURIComponent(prefix):'';
+        $.ajax(this.origin() + qs, {
+            headers: headers,
+            success: success,
+            error: error
+        });
     }
 };
         </script>
         <style>
             div.init { display: none; }
-            div.main { display: none; }
+            div.main { float: left; display: none; overflow: hidden; }
             div.init_button { width: 20em; text-align: center; clear: both; }
             div.init_label { width: 8em; clear: left; float: left; }
             div.init_input { width: 12em; clear: right; float: left; }
             #main { border: none; margin: 0; padding: 0; display: none; }
             #init_error { color: #a02020; }
+            #status_holder { width: 100%; height: 2em; }
+            #status {
+                background-color: #d0d0d0;
+                border: 1px solid #6060d0;
+                color: #6060d0; 
+                margin: 0 auto;
+                text-align: center;
+            }
+            .clear { clear: both; }
+            div.content { float: left; padding: 5px; margin: 5px; }
+            #password_list { }
+            #password_entry { }
         </style>
     </head>
     <body>
@@ -172,7 +240,10 @@ S3Bucket.prototype = {
         </div>
         <iframe id='main'>FreeKey requires iFrames.</iframe>
         <div class='main'>
-            This is where the real FreeKey content lives
+            <div id='status_holder'><div id='status'></div></div>
+            <div class='clear'>Welcome to FreeKey!</div>
+            <div class='content' id='password_list'>List<br/>of<br/>passwords</div>
+            <div class='content' id='password_entry'>Password<br/>entry<br/>form</div>
         </div>
         <script type="text/javascript">
 /*!
