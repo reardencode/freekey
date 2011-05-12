@@ -3,7 +3,10 @@
         <script type="text/javascript">
 "use strict";
 function freekey_status(message) {
-    if (message) {
+    if (arguments.length > 1) {
+        console.log(arguments[0]);
+        $('#status').html(arguments[1] + ': ' + arguments[2]).fadeIn();
+    } else if (message) {
         $('#status').html(message).fadeIn();
     } else {
         $('#status').fadeOut(400, function(){$(this).html('');});
@@ -11,18 +14,13 @@ function freekey_status(message) {
 }
 function freekey_start(data) {
     freekey_status("Loading...");
+    $('#sync_button').click(function() {freekey.modified=true;});
+    $('#unlock_button').click(function() {freekey.unlock();});
+    $('#policy_button').click(function() {freekey.bucket.get('?policy', freekey_status, freekey_status);});
     var key = data[0];
     var b = data[1];
     var bucket = new S3Bucket(b.bucket, b.access_key, b.secret_key);
     window.freekey = new FreeKey(key, bucket);
-/*    var log = function(data) {
-        console.log(data);
-    };
-    var getback = function(data) {
-        console.log('getback', data);
-        bucket.get('pack', log, log);
-    };
-    bucket.putJson('pack', JSON.stringify({"a":0}), getback, log);*/
 }
 
 function FreeKeyPack(bucket) {
@@ -44,45 +42,215 @@ FreeKeyPack.prototype = {
 };
 
 function FreeKey(key, bucket) {
+    this.uuid = sjcl.codec.base64.fromBits(sjcl.random.randomWords(4,0));
     this.key = key;
     this.bucket = bucket;
+    this.modified = false;
+    this.syncing = false;
     this.init();
 }
 
 FreeKey.prototype = {
+    _make_policy: function(lock, allow) {
+        console.log("_make_policy");
+        var policy = {"Statement":[]};
+        if (lock) {
+            policy.Statement.push({
+                "Sid":"DenyUpdateDelete",
+                "Effect":"Deny",
+                "Principal":{"AWS":"*"},
+                "Action":["s3:DeleteObject","s3:PutObject"],
+                "Resource":this.bucket.make_arns(lock)
+            });
+        }
+        if (allow) {
+            policy.Statement.push({
+                "Sid":"AllowUpdateDelete",
+                "Effect":"Allow",
+                "Principal":{"AWS":"*"},
+                "Action":["s3:DeleteObject","s3:PutObject"],
+                "Resource":this.bucket.make_arns(allow)
+            });
+        }
+        return policy;
+    },
     init: function() {
+        console.log("init");
         var fk = this;
         this.bucket.list(
                 'pack.', function(data){fk.init_list(data);}, freekey_status);
     },
     sync: function() {
-        var fk = this;
-        freekey_status("Sync called");
-        setTimeout(function(){fk.sync();}, 5000);
+        console.log("sync");
+        if (!this.syncing && this.modified) {
+            this.syncing = true;
+            var fk = this;
+            this.lock_tries = -1;
+            this.lockretry();
+        } else {
+            this.done();
+        }
     },
-    initialized: function() {
+    lockretry: function(data) {
+        console.log("lockretry");
         var fk = this;
-        freekey_status();
-        setTimeout(function(){fk.sync();}, 5000);
+        this.lock_tries++;
+        if (this.lock_tries > 2) {
+            freekey_status('Retries exceeded, manual unlock needed?');
+        } else {
+            if (this.lock_tries == 0) {
+                freekey_status("Starting sync...");
+            } else {
+                freekey_status("Retrying lock: " + this.lock_tries);
+            }
+            setTimeout(function() {
+                fk.bucket.put('lock', fk.uuid,
+                        function(data){fk.lockdown(data);},
+                        function(data){
+                            if (data.status === 403) {
+                                fk.lockget(data);
+                            } else {
+                                fk.lockretry(data);
+                            }
+                        });
+            }, this.lock_tries?2000:0);
+        }
+    },
+    lockdown: function(data) {
+        console.log("lockdown");
+        var fk = this;
+        this.bucket.setPolicy(this._make_policy(['pack.*','lock']),
+                function(data){fk.lockget(data);}, freekey_status);
+    },
+    lockget: function(data) {
+        console.log("lockget");
+        var fk = this;
+        this.bucket.get('lock',
+                function(data){fk.locked(data);}, freekey_status);
+    },
+    locked: function(data) {
+        console.log("locked");
+        var fk = this;
+        if (data === this.uuid) {
+            freekey_status("Locked bucket...");
+            this.bucket.list('pack.',
+                    function(data){fk.sync_list(data);}, freekey_status);
+        } else {
+            fk.lockretry(data);
+        }
+    },
+    sync_list: function(data) {
+        console.log("sync_list");
+        var fk = this;
+        var list = $(data);
+        this.lastlist = list;
+        var lastkey = list.find('Contents Key').last().text();
+        var version = lastkey?sjcl.codec.hex.toBits(lastkey.split('.')[1])[0]:0;
+        if (this.pack && this.packversion < version) {
+            this.bucket.get(lastkey,
+                    function(data){fk.merge(data);}, freekey_status);
+        } else {
+            this.start_savepack();
+        }
+    },
+    merge: function(pack) {
+        console.log("merge");
+        /* Merge pack into local */
+        this.start_savepack();
+    },
+    _key: function(version) {
+        return 'pack.' + sjcl.codec.hex.fromBits([version]);
+    },
+    start_savepack: function() {
+        console.log("start_savepack");
+        var fk = this;
+        var names = ['lock'];
+        this.pack_tries = -1;
+        if (this.lastlist) {
+            this.lastlist.find('Contents Key').each(
+                    function() {names.push($(this).text());});
+        }
+        this.bucket.setPolicy(this._make_policy(names),
+                function(data){fk.savepack();}, freekey_status);
+    },
+    savepack: function(data) {
+        console.log("savepack");
+        var fk = this;
+        this.pack_tries++;
+        if (this.pack_tries > 2) {
+            this.done('Retries exceeded, will try again shortly');
+        } else {
+            if (this.pack_tries == 0) {
+                freekey_status("Saving pack...");
+            } else {
+                freekey_status("Retrying save: " + this.pack_tries);
+            }
+            this.bucket.putJson(this._key(this.packversion+1), this.pack,
+                    function(data){
+                        fk.modified = false;
+                        fk.packversion++;
+                        fk.unlock(data);
+                    },
+                    function(data){fk.savepack(data);});
+        }
+    },
+    unlock: function(data) {
+        console.log("unlock");
+        var fk = this;
+        this.bucket.delPolicy(function(data){fk.cleanup();}, freekey_status);
+    },
+    cleanup: function() {
+        var fk = this;
+        console.log("cleanup");
+        var threshold = new Date();
+        threshold.setMonth(threshold.getMonth()-1);
+        if (this.lastlist) {
+            var list = this.lastlist.find('Contents');
+            delete this.lastlist;
+            var length = list.length;
+            if (length > 100) {
+                list.slice(0, length-100).each(function() {
+                    var entry = $(this);
+                    var key = entry.find('Key').text();
+                    var lmt = new Date(entry.find('LastModified').text());
+                    if (lmt < threshold) {
+                        fk.bucket.del(key);
+                    }
+                });
+            }
+        }
+        this.done();
+    },
+    done: function(message) {
+        console.log("done");
+        var fk = this;
+        freekey_status(message);
+        this.syncing = false;
+        if (this.sync_timer) clearTimeout(this.sync_timer);
+        this.sync_timer = setTimeout(function(){fk.sync();}, 5000);
     },
     init_list: function(data) {
+        console.log("init_list");
         var fk = this;
         var key = $(data).find('Contents Key').last().text();
         if (key) {
             this.bucket.get(
                     key, function(data){fk.init_load(data);}, freekey_status);
         } else {
-            this.pack = {version: 0, contents: {}};
-            this.initialized();
+            this.packversion = 0;
+            this.modified = true;
+            this.pack = {packformat: 1, contents: {}};
+            this.done();
         }
     },
     init_load: function(data) {
+        console.log("init_load");
         var fk = this;
-        if (pack.version !== 0) {
+        this.pack = data;
+        if (this.pack.packformat !== 1) {
             freekey_status("Newer FreeKey used on repo, upgrade first.");
         }
-        this.pack = data;
-        this.initialized();
+        this.done();
     }
 };
 
@@ -93,6 +261,13 @@ function S3Bucket(bucket, access_key, secret_key) {
 }
 
 S3Bucket.prototype = {
+    make_arns: function(names) {
+        var ret = [];
+        for (var i=0; i<names.length; i++) {
+            ret.push('arn:aws:s3:::' + this.bucket + '/' + names[i]);
+        }
+        return ret;
+    },
     origin: function() {
         return 'https://' + this.bucket + '.s3.amazonaws.com';
     },
@@ -140,8 +315,17 @@ S3Bucket.prototype = {
                 sjcl.codec.utf8String.toBits(this.secret_key), sjcl.hash.sha1);
         return sjcl.codec.base64.fromBits(hm.encrypt(parts.join('\n')));
     },
-    putJson: function(key, data, success, error) {
-        var ct = 'application/json';
+    del: function(key, success, error) {
+        var verb = 'DELETE';
+        $.ajax(this.origin() + '/' + key, {
+            type: verb,
+            headers: this.authHeaders(key, verb, ''),
+            success: success,
+            error: error
+        });
+    },
+    put: function(key, data, success, error, ct) {
+        ct = ct || 'application/octet-stream';
         var md5 = sjcl.codec.base64.fromBits(sjcl.hash.md5.hash(data));
         var verb = 'PUT';
         var headers = this.authHeaders(key, verb, md5, ct);
@@ -155,8 +339,15 @@ S3Bucket.prototype = {
             error: error
         });
     },
-    set_policy: function(policy) {
-        alert("Not implemented");
+    putJson: function(key, data, success, error) {
+        this.put(key, JSON.stringify(data),
+                success, error, 'application/json');
+    },
+    setPolicy: function(policy, success, error) {
+        this.putJson('?policy', policy, success, error);
+    },
+    delPolicy: function(success, error) {
+        this.del('?policy', success, error);
     },
     get: function(key, success, error) {
         $.ajax(this.origin() + '/' + key, {
@@ -196,6 +387,9 @@ S3Bucket.prototype = {
             div.content { float: left; padding: 5px; margin: 5px; }
             #password_list { }
             #password_entry { }
+            #sync_button { width: 2em; height: 2em; background-color: #ff0000; }
+            #unlock_button { width: 2em; height: 2em; background-color: #00ff00; }
+            #policy_button { width: 2em; height: 2em; background-color: #0000ff; }
         </style>
     </head>
     <body>
@@ -242,6 +436,9 @@ S3Bucket.prototype = {
         <div class='main'>
             <div id='status_holder'><div id='status'></div></div>
             <div class='clear'>Welcome to FreeKey!</div>
+            <div id='sync_button' class='clear'></div>
+            <div id='unlock_button' class='clear'></div>
+            <div id='policy_button' class='clear'></div>
             <div class='content' id='password_list'>List<br/>of<br/>passwords</div>
             <div class='content' id='password_entry'>Password<br/>entry<br/>form</div>
         </div>
@@ -326,7 +523,7 @@ $(document).ready(function() {
             $.postmsg.listen(origin, 'loaded', function() {
                 $('#init').hide();
                 $('body').css('padding',0).css('margin',0);
-                $('#main').css('width','100%').css('width','100%').fadeIn();
+                $('#main').css('width','100%').css('height','100%').fadeIn();
                 return [key, bucket];
             });
             window.onbeforeunload = function() {
