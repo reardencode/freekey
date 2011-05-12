@@ -26,8 +26,9 @@ function freekey_status_done(message) {
 }
 function freekey_start(data) {
     freekey_status("Loading...");
-    $('#sync_button').click(function() {freekey.pack.modified=true;});
-    $('#unlock_button').click(function() {freekey.unlock();});
+    $('#unlock_button').click(function() {
+        if (confirm("You sure you want to force unlock?")) freekey.unlock();
+    });
     var key = data[0];
     var b = data[1];
     var bucket = new S3Bucket(b.bucket, b.access_key, b.secret_key);
@@ -37,85 +38,126 @@ function freekey_start(data) {
         var identifier = document.add_form.identifier.value;
         var username = document.add_form.username.value;
         var password = document.add_form.password.value;
+        document.add_form.reset();
         freekey.pack.add(identifier, username, password);
+    });
+    $('#password_close').click(function() {
+        $('#password_box').fadeOut(400, function() {$('#password').html('');})
     });
 }
 
 function FKPack(key, pack, version) {
-    this.key = key;
+    this.ciph = new sjcl.cipher.aes(key);
     this.packformat = 1;
-    if (version !== undefined) {
-        this.version = version;
-    } else {
+    if (version === undefined) {
         this.version = 0;
-    }
-    if (pack) {
-        if (pack.contents === '') {
-            this.contents = {};
-        } else {
-            var ciph = new sjcl.cipher.aes(this.key);
-            var iv = pack.iv;
-            delete pack.iv;
-            iv = sjcl.codec.base64.fromBits(iv);
-            pack.contents = sjcl.codec.base64.toBits(pack.contents);
-            pack.contents = sjcl.mode.ccm.decrypt(ciph, pack.contents, iv);
-            pack.contents = sjcl.codec.utf8String.fromBits(pack.contents);
-            this.contents = JSON.parse(pack.contents);
-        }
     } else {
+        this.version = version;
+    }
+    if (pack === undefined) {
         this.contents = {};
+    } else {
+        var iv = pack.iv;
+        delete pack.iv;
+        iv = sjcl.codec.base64.toBits(iv);
+        pack.contents = sjcl.codec.base64.toBits(pack.contents);
+        pack.contents = sjcl.mode.ccm.decrypt(this.ciph, pack.contents, iv);
+        pack.contents = sjcl.codec.utf8String.fromBits(pack.contents);
+        this.contents = JSON.parse(pack.contents);
     }
     this.modified = false;
     this.display();
 }
 
 FKPack.prototype = {
+    serialize: function() {
+        var out = {};
+        out.packformat = this.packformat;
+        out.contents = JSON.stringify(this.contents);
+        var iv = sjcl.random.randomWords(4,0);
+        out.iv = sjcl.codec.base64.fromBits(iv);
+        out.contents = sjcl.codec.utf8String.toBits(out.contents);
+        out.contents = sjcl.mode.ccm.encrypt(this.ciph, out.contents, iv);
+        out.contents = sjcl.codec.base64.fromBits(out.contents);
+        return out;
+    },
     display: function() {
         var pl = $('#password_list');
         var npl = [];
         for (var k in this.contents) {
-            npl.push('<div>' + JSON.parse(k).join('<br/>') + '</div>');
+            var kd = JSON.parse(k);
+            kd = kd[1] + '@' + kd[0];
+            npl.push('<div><span class="key">'+k+'</span>'+kd+'</div>');
         }
         pl.html(npl.join('\n'));
+        var fkp = this;
+        pl.find('div').click(function() {
+            var k = $(this).find('span.key').text();
+            var pl = fkp._get(k);
+            var opl = [];
+            for (var i=0; i<pl.length; i++) {
+                var s = [
+                    '<div>', '<span class="key">', i, '</span>',
+                    '<div class="password_del"></div>', pl[i], '</div>'
+                ];
+                opl.push(s.join(''));
+            }
+            var pw = $('#password');
+            pw.html(opl.join(''));
+            pw.find('div.password_del').click(function() {
+                var p = $(this).parent();
+                fkp.del(k, p.find('span.key').text());
+                p.html('');
+                var pb = $('#password_box');
+                if (pb.text() == '') pb.fadeOut();
+            });
+            $('#password_box').fadeIn();
+            fkp._autoclose();
+        });
+    },
+    _autoclose: function() {
+        if (this._close_timer) clearTimeout(this._close_timer);
+        this._close_timer = setTimeout(
+                function() {$('#password_close').click();}, 30000);
     },
     del: function(k, i) {
-        k = JSON.stringify(k);
         if (!(k in this.contents)) return;
         if (i === undefined) {
             delete this.contents[k];
-            return;
+        } else {
+            this.contents[k].splice(i, 1);
+            if (this.contents[k].length === 0) delete this.contents[k];
         }
-        delete this.contents[k][i];
         this.modified = true;
         this.display();
     },
-    get: function(k) {
-        k = JSON.stringify(k);
-        var ciph = new sjcl.cipher.aes(this.key);
+    _get: function(k) {
         var pl = this.contents[k] = this.contents[k] || [];
         var ret = [];
         for (var i=0; i<pl.length; i++) {
             var v = sjcl.codec.base64.toBits(pl[i]);
             var iv = v.splice(0,4);
-            var password = sjcl.mode.ccm.decrypt(ciph, v, iv);
-            ret.push(sjcl.utf8String.fromBits(password));
+            var password = sjcl.mode.ccm.decrypt(this.ciph, v, iv);
+            ret.push(sjcl.codec.utf8String.fromBits(password));
         }
         return ret;
-        this.display();
+    },
+    get: function(identifier, username) {
+        return this._get(JSON.stringify([identifier, username]));
     },
     add: function(identifier, username, password) {
         var k = JSON.stringify([identifier, username]);
-        var ciph = new sjcl.cipher.aes(this.key);
         password = sjcl.codec.utf8String.toBits(password);
         var pl = this.contents[k] = this.contents[k] || [];
         for (var i=0; i<pl.length; i++) {
             var v = sjcl.codec.base64.toBits(pl[i]);
             var iv = v.splice(0,4);
-            var nv = sjcl.mode.ccm.encrypt(ciph, password, iv);
+            var nv = iv.concat(sjcl.mode.ccm.encrypt(this.ciph, password, iv));
+            nv = sjcl.codec.base64.fromBits(nv);
             if (nv == pl[i]) return;
         }
         var iv = sjcl.random.randomWords(4,0);
-        var v = iv.concat(sjcl.mode.ccm.encrypt(ciph, password, iv));
+        var v = iv.concat(sjcl.mode.ccm.encrypt(this.ciph, password, iv));
         pl.push(sjcl.codec.base64.fromBits(v));
         this.modified = true;
         this.display();
@@ -260,19 +302,7 @@ FK.fn.savepack = function(data) {
     } else if (this.pack_tries > 0) {
         freekey_status("Retrying save: " + this.pack_tries);
     }
-    var out = {};
-    var ciph = new sjcl.cipher.aes(this.key);
-    out.packformat = this.pack.packformat;
-    out.contents = JSON.stringify(this.pack.contents);
-    if (out.contents == '[]') {
-        out.contents = '';
-    } else {
-        var iv = sjcl.random.randomWords(4,0);
-        out.iv = sjcl.codec.base64.fromBits(iv);
-        out.contents = sjcl.codec.utf8String.toBits(out.contents);
-        out.contents = sjcl.mode.ccm.encrypt(ciph, out.contents, iv);
-        out.contents = sjcl.codec.base64.fromBits(out.contents);
-    }
+    var out = this.pack.serialize();
     var fk = this;
     this.bucket.putJson(this._key(this.pack.version+1), out,
             function(data){
@@ -482,10 +512,36 @@ S3Bucket.prototype = {
             #status { border: 1px solid #6060d0; color: #6060d0; }
             .clear { clear: both; }
             div.content { float: left; padding: 5px; margin: 5px; }
-            #password_list { }
-            #password_entry { }
-            #sync_button { width: 2em; height: 2em; background-color: #ff0000; }
-            #unlock_button { width: 2em; height: 2em; background-color: #00ff00; }
+            #password_pane { clear: left; }
+            #password_entry { clear: right; }
+            #password_list div { padding: 5px; }
+            #password_list div:nth-child(even) { background-color: #bfffbf; }
+            #password_list div:nth-child(odd) { background-color: #bfbfff; }
+            #unlock_button { padding: 5px; }
+            span.key { display: none; }
+            #password_box {
+                background-color: #ffffbf;
+                display: none;
+                float: left;
+                overflow: hidden;
+                padding: 5px;
+                width: 100%;
+            }
+            #password_close {
+                background-color: #ff0000;
+                float: right;
+                height: 10px;
+                margin: 5px;
+                width: 10px;
+            }
+            .password_del {
+                background-color: #ff0000;
+                float: left;
+                height: 5px;
+                margin: 5px;
+                width: 5px;
+            }
+            #password { float: left; }
         </style>
     </head>
     <body>
@@ -533,10 +589,12 @@ S3Bucket.prototype = {
             <div id='error'></div>
             <div id='status_holder'><div id='status'></div></div>
             <div class='clear'>Welcome to FreeKey!</div>
-            <div id='sync_button' class='clear'></div>
-            <div id='unlock_button' class='clear'></div>
             <div class='content' id='password_pane'>
-            <div class='content' id='password_list'></div>
+                <div id='password_box' class='clear'>
+                    <div id='password_close'></div>
+                    <div id='password'></div>
+                </div>
+                <div id='password_list'></div>
             </div>
             <div class='content' id='password_entry'>
                 <form name='add_form'>
@@ -549,6 +607,7 @@ S3Bucket.prototype = {
                     <div class="add_button"><input type="submit" name="add" value="Add password"/></div>
                 </form>
             </div>
+            <div id='unlock_button' class='clear'>Manual unlock</div>
         </div>
         <script type="text/javascript">
 /*!
@@ -743,6 +802,17 @@ $(document).ready(function() {
     }
 });
 
+function test() {
+    var salt = sjcl.random.randomWords(2,0);
+    var iv = sjcl.random.randomWords(4,0);
+    var key = sjcl.misc.pbkdf2("test", salt, 10000, 256);
+    var ciph = new sjcl.cipher.aes(key);
+    var ptb = sjcl.codec.utf8String.toBits('{}');
+    var ctb = sjcl.mode.ccm.encrypt(ciph, ptb, iv);
+    ciph = new sjcl.cipher.aes(key);
+    var otb = sjcl.mode.ccm.decrypt(ciph, ctb, iv);
+    console.log(ptb, ctb, otb);
+}
         </script>
     </body>
 </html>
