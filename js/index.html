@@ -31,248 +31,312 @@ function freekey_start(data) {
     var key = data[0];
     var b = data[1];
     var bucket = new S3Bucket(b.bucket, b.access_key, b.secret_key);
-    window.freekey = new FreeKey(key, bucket);
+    window.freekey = new FK(key, bucket);
+    $(document.add_form).submit(function(e) {
+        e.preventDefault();
+        var identifier = document.add_form.identifier.value;
+        var username = document.add_form.username.value;
+        var password = document.add_form.password.value;
+        freekey.pack.add(identifier, username, password);
+    });
 }
 
-function FreeKey(key, bucket) {
+function FKPack(key, pack, version) {
+    this.key = key;
+    this.packformat = 1;
+    if (version !== undefined) {
+        this.version = version;
+    } else {
+        this.version = 0;
+    }
+    if (pack) {
+        if (pack.contents === '') {
+            this.contents = {};
+        } else {
+            var ciph = new sjcl.cipher.aes(this.key);
+            var iv = pack.iv;
+            delete pack.iv;
+            iv = sjcl.codec.base64.fromBits(iv);
+            pack.contents = sjcl.codec.base64.toBits(pack.contents);
+            pack.contents = sjcl.mode.ccm.decrypt(ciph, pack.contents, iv);
+            pack.contents = sjcl.codec.utf8String.fromBits(pack.contents);
+            this.contents = JSON.parse(pack.contents);
+        }
+    } else {
+        this.contents = {};
+    }
+    this.modified = false;
+    this.display();
+}
+
+FKPack.prototype = {
+    display: function() {
+        var pl = $('#password_list');
+        var npl = [];
+        for (var k in this.contents) {
+            npl.push('<div>' + JSON.parse(k).join('<br/>') + '</div>');
+        }
+        pl.html(npl.join('\n'));
+    },
+    del: function(k, i) {
+        k = JSON.stringify(k);
+        if (!(k in this.contents)) return;
+        if (i === undefined) {
+            delete this.contents[k];
+            return;
+        }
+        delete this.contents[k][i];
+        this.modified = true;
+        this.display();
+    },
+    get: function(k) {
+        k = JSON.stringify(k);
+        var ciph = new sjcl.cipher.aes(this.key);
+        var pl = this.contents[k] = this.contents[k] || [];
+        var ret = [];
+        for (var i=0; i<pl.length; i++) {
+            var v = sjcl.codec.base64.toBits(pl[i]);
+            var iv = v.splice(0,4);
+            var password = sjcl.mode.ccm.decrypt(ciph, v, iv);
+            ret.push(sjcl.utf8String.fromBits(password));
+        }
+        return ret;
+        this.display();
+    },
+    add: function(identifier, username, password) {
+        var k = JSON.stringify([identifier, username]);
+        var ciph = new sjcl.cipher.aes(this.key);
+        password = sjcl.codec.utf8String.toBits(password);
+        var pl = this.contents[k] = this.contents[k] || [];
+        for (var i=0; i<pl.length; i++) {
+            var v = sjcl.codec.base64.toBits(pl[i]);
+            var iv = v.splice(0,4);
+            var nv = sjcl.mode.ccm.encrypt(ciph, password, iv);
+            if (nv == pl[i]) return;
+        }
+        var iv = sjcl.random.randomWords(4,0);
+        var v = iv.concat(sjcl.mode.ccm.encrypt(ciph, password, iv));
+        pl.push(sjcl.codec.base64.fromBits(v));
+        this.modified = true;
+        this.display();
+    }
+};
+
+function FK(key, bucket) {
     this.uuid = sjcl.codec.base64.fromBits(sjcl.random.randomWords(4,0));
     this.key = key;
     this.bucket = bucket;
-    this.modified = false;
     this.syncing = false;
     this.init();
 }
 
-FreeKey.prototype = {
-    init: function() {
-        console.log("init");
-        freekey_status("Initializing...");
-        var fk = this;
-        this.bucket.list(
-                'pack.', function(data){fk.init_list(data);}, freekey_error);
-    },
-    sync: function() {
-        console.log("sync");
-        if (this.syncing || !this.pack.modified) {
-            this.done(false);
-            return;
-        }
-        this.syncing = true;
-        this.lock_tries = 0;
-        this.lockretry();
-    },
-    lockretry: function(data) {
-        console.log("lockretry");
-        this.lock_tries++;
-        if (this.lock_tries > 15) {
-            freekey_error('Retries exceeded, manual unlock needed?');
-        } else {
-            if (this.lock_tries == 1) {
-                freekey_status("Starting sync...");
-            } else {
-                freekey_status("Retrying lock: " + this.lock_tries);
-            }
-            var fk = this;
-            setTimeout(function() {
-                fk.bucket.put('lock', fk.uuid,
-                        function(data){fk.lockdown(data);},
-                        function(data){
-                            if (data.status === 403) {
-                                fk.lockget(data);
-                            } else {
-                                fk.lockretry(data);
-                            }
-                        });
-            }, this.lock_tries?2000:0);
-        }
-    },
-    lockdown: function(data) {
-        console.log("lockdown");
-        var fk = this;
-        this.bucket.setPolicy(this.bucket.make_policy(['pack.*','lock']),
-                function(data){fk.lockget(data);}, freekey_error);
-    },
-    lockget: function(data) {
-        console.log("lockget");
-        var fk = this;
-        this.bucket.get('lock',
-                function(data){fk.locked(data);}, freekey_error);
-    },
-    locked: function(data) {
-        console.log("locked");
-        if (data === this.uuid) {
-            freekey_status("Listing packs...");
-            var fk = this;
-            this.bucket.list('pack.',
-                    function(data){fk.sync_list(data);}, freekey_error);
-        } else {
-            this.lockretry(data);
-        }
-    },
-    _decrypt: function(pack) {
-        var ciph = new sjcl.cipher.aes(this.key);
-        var iv = pack.iv;
-        delete pack.iv;
-        if (typeof iv === 'string')
-            iv = sjcl.codec.base64.fromBits(iv);
-        if (pack.contents === '') {
-            pack.contents = {};
-        } else {
-            pack.contents = sjcl.codec.base64.toBits(pack.contents);
-            pack.contents = sjcl.mode.ccm.decrypt(ciph, pack.contents, iv);
-            pack.contents = sjcl.codec.utf8String.fromBits(pack.contents);
-            pack.contents = JSON.parse(pack.contents);
-        }
-        return pack;
-    },
-    sync_list: function(data) {
-        console.log("sync_list");
-        var list = $(data);
-        this.lastlist = list;
-        var lastkey = list.find('Contents Key').last().text();
-        var version = this._version(lastkey);
-        if (this.pack.version >= version) {
-            this.start_savepack();
-            return;
-        }
-        freekey_status("Merging newer pack...");
-        var fk = this;
-        this.bucket.get(lastkey,
-                function(data){fk.merge(version, data);}, freekey_error);
-    },
-    merge: function(version, pack) {
-        console.log("merge");
-        if (this.pack.packformat !== 1) {
-            freekey_error("Newer FreeKey used on repo, upgrade first.");
-            return;
-        }
-        pack = this._decrypt(pack);
-        for (k in pack) {
-            if (k in this.pack) {
-                for (var i=0; i<pack[k].length; i++) {
-                    var v = pack[k][i];
-                    if (!$.inArray(v, this.pack[k])) {
-                        this.pack[k].push(pack[k][i]);
-                    }
-                }
-            } else {
-                this.pack[k] = pack[k];
-            }
-        }
-        this.pack.version = version;
-        this.start_savepack();
-    },
-    _key: function(version) {
-        return 'pack.' + sjcl.codec.hex.fromBits([version]);
-    },
-    start_savepack: function() {
-        console.log("start_savepack");
-        var names = ['lock'];
-        this.pack_tries = -1;
-        if (this.lastlist) {
-            this.lastlist.find('Contents Key').each(
-                    function() {names.push($(this).text());});
-        }
-        var fk = this;
-        this.bucket.setPolicy(this.bucket.make_policy(names),
-                function(data){fk.savepack();}, freekey_error);
-    },
-    savepack: function(data) {
-        console.log("savepack");
-        this.pack_tries++;
-        if (this.pack_tries > 2) {
-            freekey_error('Retries exceeded, will try again shortly');
-            this.done(false);
-        } else {
-            if (this.pack_tries == 0) {
-                freekey_status("Saving pack...");
-            } else {
-                freekey_status("Retrying save: " + this.pack_tries);
-            }
-            var out = {};
-            var ciph = new sjcl.cipher.aes(this.key);
-            out.packformat = this.pack.packformat;
-            var iv = sjcl.random.randomWords(4,0);
-            out.iv = sjcl.codec.base64.fromBits(iv);
-            out.contents = JSON.stringify(this.pack.contents);
-            if (out.contents === '{}') {
-                out.contents = '';
-            } else {
-                out.contents = sjcl.codec.utf8String.toBits(out.contents);
-                out.contents = sjcl.mode.ccm.encrypt(ciph, out.contents, iv);
-                out.contents = sjcl.codec.base64.fromBits(out.contents);
-            }
-            var fk = this;
-            this.bucket.putJson(this._key(this.pack.version+1), out,
-                    function(data){
-                        fk.pack.modified = false;
-                        fk.pack.version++;
-                        fk.unlock(data);
-                    },
-                    function(data){fk.savepack(data);}, false);
-        }
-    },
-    unlock: function(data) {
-        console.log("unlock");
-        var fk = this;
-        this.bucket.delPolicy(function(data){fk.cleanup();}, freekey_error);
-    },
-    cleanup: function() {
-        console.log("cleanup");
-        if (this.lastlist) {
-            var list = this.lastlist.find('Contents');
-            delete this.lastlist;
-            if (list.length > 100) {
-                var fk = this;
-                var threshold = new Date();
-                threshold.setMonth(threshold.getMonth()-1);
-                list.slice(0, list.length-100).each(function() {
-                    var entry = $(this);
-                    var key = entry.find('Key').text();
-                    var lmt = new Date(entry.find('LastModified').text());
-                    if (lmt < threshold) fk.bucket.del(key);
-                });
-            }
-        }
-        this.done();
-    },
+FK.fn = FK.prototype = {
     _version: function(key) {
         return key?sjcl.codec.hex.toBits(key.split('.')[1])[0]:0;
     },
-    done: function(show) {
-        console.log("done");
-        this.syncing = false;
-        if (show) {
-            freekey_status_done("Done...");
-        } else {
-            freekey_status();
-        }
-        if (this.sync_timer) clearTimeout(this.sync_timer);
-        var fk = this;
-        this.sync_timer = setTimeout(function(){fk.sync();}, 5000);
-    },
-    init_list: function(data) {
-        console.log("init_list");
-        var key = $(data).find('Contents Key').last().text();
-        if (key) {
-            var version = this._version(key);
-            var fk = this;
-            this.bucket.get(key,
-                    function(data){fk.init_load(version, data);}, freekey_error);
-            return;
-        }
-        this.pack = {version: 0, modified: true, packformat: 1, contents: {}};
-        this.done();
-    },
-    init_load: function(version, data) {
-        console.log("init_load");
-        if (data.packformat !== 1)
-            freekey_error("Newer FreeKey used on repo, upgrade first.");
-        console.log(data);
-        this.pack = this._decrypt(data);
-        this.pack.version = version;
-        this.done();
+    _key: function(version) {
+        return 'pack.' + sjcl.codec.hex.fromBits([version]);
     }
+};
+FK.fn.init = function() {
+    console.log("init");
+    freekey_status("Initializing...");
+    var fk = this;
+    this.bucket.list(
+            'pack.', function(data){fk.init_list(data);}, freekey_error);
+};
+FK.fn.sync = function() {
+    console.log("sync");
+    if (this.syncing || !this.pack.modified) {
+        this.done(false);
+        return;
+    }
+    this.syncing = true;
+    this.lock_tries = -1;
+    freekey_status("Starting sync...");
+    this.lockretry();
+};
+FK.fn.lockretry = function(data) {
+    console.log("lockretry");
+    this.lock_tries++;
+    if (this.lock_tries > 15) {
+        freekey_error('Retries exceeded, manual unlock needed?');
+        return;
+    } else if (this.lock_tries > 0) {
+        freekey_status("Retrying lock: " + this.lock_tries);
+    }
+    var fk = this;
+    setTimeout(function() {
+        fk.bucket.put('lock', fk.uuid,
+                function(data){fk.lockdown(data);},
+                function(data){
+                    if (data.status === 403) {
+                        fk.lockget(data);
+                    } else {
+                        fk.lockretry(data);
+                    }
+                });
+    }, this.lock_tries?2000:0);
+};
+FK.fn.lockdown = function(data) {
+    console.log("lockdown");
+    var fk = this;
+    this.bucket.setPolicy(this.bucket.make_policy(['pack.*','lock']),
+            function(data){fk.lockget(data);}, freekey_error);
+};
+FK.fn.lockget = function(data) {
+    console.log("lockget");
+    var fk = this;
+    this.bucket.get('lock',
+            function(data){fk.locked(data);}, freekey_error);
+};
+FK.fn.locked = function(data) {
+    console.log("locked");
+    if (data !== this.uuid) {
+        this.lockretry(data);
+        return;
+    }
+    freekey_status("Listing packs...");
+    var fk = this;
+    this.bucket.list('pack.',
+            function(data){fk.sync_list(data);}, freekey_error);
+};
+FK.fn.sync_list = function(data) {
+    console.log("sync_list");
+    var list = $(data);
+    this.lastlist = list;
+    var lastkey = list.find('Contents Key').last().text();
+    var version = this._version(lastkey);
+    if (this.pack.version >= version) {
+        this.start_savepack();
+        return;
+    }
+    freekey_status("Merging newer pack...");
+    var fk = this;
+    this.bucket.get(lastkey,
+            function(data){fk.merge(version, data);}, freekey_error);
+};
+FK.fn.merge = function(version, pack) {
+    console.log("merge");
+    if (pack.packformat !== 1) {
+        freekey_error("Newer FreeKey used on repo, upgrade first.");
+        return;
+    }
+    pack = new FKPack(this.key, pack, version);
+    var mine = this.pack.contents, theirs = pack.contents;
+    for (var k in theirs) {
+        if (k in mine) {
+            for (var i=0; i<theirs[k].length; i++) {
+                var v = theirs[k][i];
+                if (!$.inArray(v, mine[k])) mine[k].push(v);
+            }
+        } else {
+            mine[k] = theirs[k];
+        }
+    }
+    this.pack.version = pack.version;
+    this.start_savepack();
+};
+FK.fn.start_savepack = function() {
+    console.log("start_savepack");
+    var names = ['lock'];
+    this.pack_tries = -1;
+    if (this.lastlist) {
+        this.lastlist.find('Contents Key').each(
+                function() {names.push($(this).text());});
+    }
+    var fk = this;
+    freekey_status("Saving pack...");
+    this.bucket.setPolicy(this.bucket.make_policy(names),
+            function(data){fk.savepack();}, freekey_error);
+};
+FK.fn.savepack = function(data) {
+    console.log("savepack");
+    this.pack_tries++;
+    if (this.pack_tries > 2) {
+        freekey_error('Retries exceeded, will try again shortly');
+        this.done(false);
+        return;
+    } else if (this.pack_tries > 0) {
+        freekey_status("Retrying save: " + this.pack_tries);
+    }
+    var out = {};
+    var ciph = new sjcl.cipher.aes(this.key);
+    out.packformat = this.pack.packformat;
+    out.contents = JSON.stringify(this.pack.contents);
+    if (out.contents == '[]') {
+        out.contents = '';
+    } else {
+        var iv = sjcl.random.randomWords(4,0);
+        out.iv = sjcl.codec.base64.fromBits(iv);
+        out.contents = sjcl.codec.utf8String.toBits(out.contents);
+        out.contents = sjcl.mode.ccm.encrypt(ciph, out.contents, iv);
+        out.contents = sjcl.codec.base64.fromBits(out.contents);
+    }
+    var fk = this;
+    this.bucket.putJson(this._key(this.pack.version+1), out,
+            function(data){
+                fk.pack.modified = false;
+                fk.pack.version++;
+                fk.unlock(data);
+            },
+            function(data){fk.savepack(data);}, false);
+};
+FK.fn.unlock = function(data) {
+    console.log("unlock");
+    var fk = this;
+    this.bucket.delPolicy(function(data){fk.cleanup();}, freekey_error);
+};
+FK.fn.cleanup = function() {
+    console.log("cleanup");
+    if (this.lastlist) {
+        var list = this.lastlist.find('Contents');
+        delete this.lastlist;
+        if (list.length > 100) {
+            var fk = this;
+            var threshold = new Date();
+            threshold.setMonth(threshold.getMonth()-1);
+            list.slice(0, list.length-100).each(function() {
+                var entry = $(this);
+                var key = entry.find('Key').text();
+                var lmt = new Date(entry.find('LastModified').text());
+                if (lmt < threshold) fk.bucket.del(key);
+            });
+        }
+    }
+    this.done();
+};
+FK.fn.done = function(show) {
+    console.log("done");
+    this.syncing = false;
+    if (show) {
+        freekey_status_done("Done...");
+    } else {
+        freekey_status();
+    }
+    if (this.sync_timer) clearTimeout(this.sync_timer);
+    var fk = this;
+    this.sync_timer = setTimeout(function(){fk.sync();}, 5000);
+};
+FK.fn.init_list = function(data) {
+    console.log("init_list");
+    var key = $(data).find('Contents Key').last().text();
+    if (key) {
+        var version = this._version(key);
+        var fk = this;
+        this.bucket.get(key,
+                function(data){fk.init_load(version, data);}, freekey_error);
+        return;
+    }
+    this.pack = new FKPack(this.key);
+    this.done();
+};
+FK.fn.init_load = function(version, data) {
+    console.log("init_load");
+    if (data.packformat !== 1)
+        freekey_error("Newer FreeKey used on repo, upgrade first.");
+    this.pack = new FKPack(this.key, data, version);
+    this.done();
 };
 
 function S3Bucket(bucket, access_key, secret_key) {
@@ -471,8 +535,20 @@ S3Bucket.prototype = {
             <div class='clear'>Welcome to FreeKey!</div>
             <div id='sync_button' class='clear'></div>
             <div id='unlock_button' class='clear'></div>
-            <div class='content' id='password_list'>List<br/>of<br/>passwords</div>
-            <div class='content' id='password_entry'>Password<br/>entry<br/>form</div>
+            <div class='content' id='password_pane'>
+            <div class='content' id='password_list'></div>
+            </div>
+            <div class='content' id='password_entry'>
+                <form name='add_form'>
+                    <div class='add_label'><label for="identifier">Identifier:</label></div>
+                    <div class='add_input'><input type="text" name="identifier" value=""/></div>
+                    <div class='add_label'><label for="username">Username:</label></div>
+                    <div class='add_input'><input type="text" name="username" value=""/></div>
+                    <div class='add_label'><label for="password">Password:</label></div>
+                    <div class='add_input'><input type="password" name="password" value=""/></div>
+                    <div class="add_button"><input type="submit" name="add" value="Add password"/></div>
+                </form>
+            </div>
         </div>
         <script type="text/javascript">
 /*!
@@ -594,10 +670,8 @@ $(document).ready(function() {
             var pass = document.auth_form.authpass.value;
             var key = sjcl.misc.pbkdf2(pass, erc.salt, 10000, 256);
             var ciph = new sjcl.cipher.aes(key);
-            if (typeof erc.iv === 'string')
-                erc.iv = sjcl.codec.base64.toBits(erc.iv);
-            if (typeof erc.value === 'string')
-                erc.value = sjcl.codec.base64.toBits(erc.value);
+            erc.iv = sjcl.codec.base64.toBits(erc.iv);
+            erc.value = sjcl.codec.base64.toBits(erc.value);
             var pt = sjcl.mode.ccm.decrypt(ciph, erc.value, erc.iv);
             var json = sjcl.codec.utf8String.fromBits(pt);
             var rc = JSON.parse(json);
