@@ -366,6 +366,7 @@ FK.fn.init_load = function(version, data) {
     if (data.packformat !== 1)
         freekey_error("Newer FreeKey used on repo, upgrade first.");
     this.pack = new FKPack(this.key, data, version);
+    $('#password_entry').fadeIn();
     this.done();
 };
 
@@ -513,11 +514,11 @@ S3Bucket.prototype = {
             .clear { clear: both; }
             div.content { float: left; padding: 5px; margin: 5px; }
             #password_pane { clear: left; }
-            #password_entry { clear: right; }
+            #password_entry { clear: right; display: none; }
             #password_list div { padding: 5px; }
             #password_list div:nth-child(even) { background-color: #bfffbf; }
             #password_list div:nth-child(odd) { background-color: #bfbfff; }
-            #unlock_button { padding: 5px; }
+            #unlock_button { background-color: #bbbbbb; padding: 5px; }
             span.key { display: none; }
             #password_box {
                 background-color: #ffffbf;
