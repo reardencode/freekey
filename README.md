@@ -15,6 +15,7 @@ Status
  - Synchronization between multiple clients works fine
  - Removing passwords works fine
  - The UI is usable
+ - TODO: Ensure that the repo isn't locked before closing!
  - TODO: Ensure that changes are saved before closing
  - TODO: Random passwords
  - TODO: Hashed password mode (no S3)

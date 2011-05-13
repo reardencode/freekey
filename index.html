@@ -39,6 +39,10 @@ function freekey_status_done(message) {
     $('#status').html(message).fadeIn().
         delay(2000).fadeOut(400, function(){$(this).empty();});
 }
+function freekey_unload() {
+    return "Are you sure you want to leave?  You will need to" +
+        " reenter your password to continue using FreeKey.";
+};
 function freekey_start(data) {
     freekey_status("Loading...");
     $('#unlock_button').click(function() {
@@ -113,7 +117,7 @@ FKPack.prototype = {
         }
         pl.html(npl.join('\n'));
         var fkp = this;
-        pl.find('div.identifier div.del').click(function() {
+        pl.find('div.identifier .del').click(function() {
             var ident = $(this).parents('div.identifier');
             fkp.del(ident.find('span.key').text());
             ident.parent().remove();
@@ -136,7 +140,7 @@ FKPack.prototype = {
             pwc.click(function() {
                 pw.slideUp(400, function() {$(this).empty();});
             });
-            pw.find('div.del').click(function() {
+            pw.find('.del').click(function() {
                 var p = $(this).parent();
                 fkp.del(k, p.find('span.key').text());
                 p.remove();
@@ -725,10 +729,7 @@ $(document).ready(function() {
                 $('#main').css('width','100%').css('height','100%').fadeIn();
                 return [pass, bucket];
             });
-            window.onbeforeunload = function() {
-                return "Are you sure you want to leave?  You will need to" +
-                    " reenter your password to continue using FreeKey.";
-            };
+            window.onbeforeunload = freekey_unload;
             this.contentWindow.location = bucket.uri(key, 5);
         });
         var html = '<html>' + $('html').html() + '</html>';
@@ -833,18 +834,6 @@ $(document).ready(function() {
                 {success: freekey_start});
     }
 });
-
-function test() {
-    var salt = sjcl.random.randomWords(2,0);
-    var iv = sjcl.random.randomWords(4,0);
-    var key = sjcl.misc.pbkdf2("test", salt, 10000, 256);
-    var ciph = new sjcl.cipher.aes(key);
-    var ptb = sjcl.codec.utf8String.toBits('{}');
-    var ctb = sjcl.mode.ccm.encrypt(ciph, ptb, iv);
-    ciph = new sjcl.cipher.aes(key);
-    var otb = sjcl.mode.ccm.decrypt(ciph, ctb, iv);
-    console.log(ptb, ctb, otb);
-}
         </script>
     </body>
 </html>
