@@ -9,12 +9,34 @@ freekey is an easy way to manage all of your passwords.
 Status
 ------
 
- - Undergoing rewrite from python installable application to completely
-   downloadable and/or web loadable HTML/Javascript application.  You can check
-   out the progress of this in the js subdir.  Eventually I'll rearrange to
-   make that the primary.
- - The JavaScript version is intended to be a complete password manager that
-   can be copied as a single HTML file to any device.  AWS credentials are
-   stored in HTML5 localStorage, passwords are stored on S3 using the same
-   scheme described in the debrecated README.old.md file.
- 
+ - FreeKey in HTML5/Javascript is functional, but not complete.
+ - Manual password entry works fine
+ - Storage to S3 works fine
+ - Synchronization between multiple clients works fine
+ - Removing passwords works fine
+ - The UI is usable
+ - TODO: Ensure that changes are saved before closing
+ - TODO: Random passwords
+ - TODO: Hashed password mode (no S3)
+ - TODO: (Maybe) Flash -> clipboard integration
+ - TODO: Better UI
+ - TODO: Automatic old-lock clearing?
+ - TODO: Testing
+
+
+Design Goals
+------------
+
+ - Good security, but not paranoid
+ - Portable simple storage format
+ - Hash (of user@domain + version), random, or manual passwords
+ - S3 storage
+ - Simple UI
+ - Clipboard integration
+ - Clean maintainable code
+
+
+Dependencies
+------------
+
+ - Modern browser with localStorage and GET/POST/PUT/DELETE ajax support
