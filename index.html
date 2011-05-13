@@ -22,7 +22,7 @@ function freekey_status(message) {
 }
 function freekey_status_done(message) {
     $('#status').html(message).fadeIn().
-        delay(5000).fadeOut(400, function(){$(this).html('');});
+        delay(2000).fadeOut(400, function(){$(this).html('');});
 }
 function freekey_start(data) {
     freekey_status("Loading...");
@@ -69,7 +69,6 @@ function FKPack(pass, pack, version) {
         this.contents = JSON.parse(pack.contents);
     }
     this.modified = false;
-    this.display();
 }
 
 FKPack.prototype = {
@@ -177,6 +176,7 @@ function FK(pass, bucket) {
     this.pass = pass;
     this.bucket = bucket;
     this.syncing = false;
+    this.sync_count = 0;
     this.init();
 }
 
@@ -197,7 +197,8 @@ FK.fn.init = function() {
 };
 FK.fn.sync = function() {
     console.log("sync");
-    if (this.syncing || !this.pack.modified) {
+    this.sync_count++;
+    if (this.syncing || !this.pack.modified && this.sync_count % 6 !== 5) {
         this.done(false);
         return;
     }
@@ -256,9 +257,13 @@ FK.fn.sync_list = function(data) {
     var list = $(data);
     this.lastlist = list;
     var lastkey = list.find('Contents Key').last().text();
-    var version = this._version(lastkey);
+    var version = lastkey==''?-1:this._version(lastkey);
     if (this.pack.version >= version) {
-        this.start_savepack();
+        if (this.pack.modified) {
+            this.start_savepack();
+        } else {
+            this.unlock();
+        }
         return;
     }
     freekey_status("Merging newer pack...");
@@ -272,7 +277,13 @@ FK.fn.merge = function(version, pack) {
         freekey_error("Newer FreeKey used on repo, upgrade first.");
         return;
     }
-    pack = new FKPack(this.key, pack, version);
+    pack = new FKPack(this.pass, pack, version);
+    if (!this.pack.modified) {
+        this.pack = pack;
+        this.pack.display();
+        this.unlock();
+        return;
+    }
     var mine = this.pack.contents, theirs = pack.contents;
     for (var k in theirs) {
         if (k in mine) {
@@ -285,6 +296,7 @@ FK.fn.merge = function(version, pack) {
         }
     }
     this.pack.version = pack.version;
+    this.pack.display();
     this.start_savepack();
 };
 FK.fn.start_savepack = function() {
@@ -305,6 +317,7 @@ FK.fn.savepack = function(data) {
     this.pack_tries++;
     if (this.pack_tries > 2) {
         freekey_error('Retries exceeded, will try again shortly');
+        freekey_status();
         this.done(false);
         return;
     } else if (this.pack_tries > 0) {
@@ -347,11 +360,7 @@ FK.fn.cleanup = function() {
 FK.fn.done = function(show) {
     console.log("done");
     this.syncing = false;
-    if (show) {
-        freekey_status_done("Done...");
-    } else {
-        freekey_status();
-    }
+    if (show === undefined || show) freekey_status_done("Done...");
     $('#password_entry').fadeIn();
     if (this.sync_timer) clearTimeout(this.sync_timer);
     var fk = this;
@@ -368,6 +377,7 @@ FK.fn.init_list = function(data) {
         return;
     }
     this.pack = new FKPack(this.pass);
+    this.pack.display();
     this.done();
 };
 FK.fn.init_load = function(version, data) {
@@ -375,6 +385,7 @@ FK.fn.init_load = function(version, data) {
     if (data.packformat !== 1)
         freekey_error("Newer FreeKey used on repo, upgrade first.");
     this.pack = new FKPack(this.pass, data, version);
+    this.pack.display();
     this.done();
 };
 
