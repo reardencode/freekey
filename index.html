@@ -25,19 +25,19 @@ function freekey_error(message) {
     if (message) {
         $('#error').append('<div>'+message+'</div>').slideDown();
     } else {
-        $('#error').slideUp(400, function(){$(this).html('');});
+        $('#error').slideUp(400, function(){$(this).empty();});
     }
 }
 function freekey_status(message) {
     if (message) {
         $('#status').html(message).fadeIn();
     } else {
-        $('#status').fadeOut(400, function(){$(this).html('');});
+        $('#status').fadeOut(400, function(){$(this).empty();});
     }
 }
 function freekey_status_done(message) {
     $('#status').html(message).fadeIn().
-        delay(2000).fadeOut(400, function(){$(this).html('');});
+        delay(2000).fadeOut(400, function(){$(this).empty();});
 }
 function freekey_start(data) {
     freekey_status("Loading...");
@@ -106,38 +106,36 @@ FKPack.prototype = {
         for (var k in this.contents) {
             var kd = JSON.parse(k);
             kd = kd[1] + '@' + kd[0];
-            npl.push(['<div><div class="identifier"><span class="key">',k,'</span>',
-                    kd,'</div><div class="password"></div></div>'].join(''));
+            npl.push(['<div><div class="identifier">',
+                    '<span class="key">',k,'</span>',kd,
+                    '</div><div class="password"></div></div>'].join(''));
         }
         pl.html(npl.join('\n'));
         var fkp = this;
         pl.find('div.identifier').click(function() {
-            var item = $(this);
-            var k = item.find('span.key').text();
-            var pl = fkp._get(k);
+            var ident = $(this);
+            var pws = fkp._get(ident.find('span.key').text());
             var opl = ['<div class="password_close"></div>'];
-            for (var i=0; i<pl.length; i++) {
+            for (var i=0; i<pws.length; i++) {
                 var s = [
                     '<div>', '<span class="key">', i, '</span>',
-                    '<div class="password_del"></div>', pl[i], '</div>'
+                    '<div class="password_del"></div>', pws[i], '</div>'
                 ];
                 opl.push(s.join(''));
             }
-            var pw = item.parent().find('div.password');
+            var pw = ident.parent().find('div.password');
             pw.html(opl.join(''));
+            var pwc = pw.find('div.password_close');
+            pwc.click(function() {
+                pw.slideUp(400, function() {$(this).empty();});
+            });
             pw.find('div.password_del').click(function() {
                 var p = $(this).parent();
                 fkp.del(k, p.find('span.key').text());
-                p.html('');
-                var pc = p.parent();
-                if (pc.text() == '') pc.fadeOut();
+                p.remove();
+                if (pw.text() == '') pwc.click();
             });
-            var pwc = pw.find('div.password_close');
-            pwc.click(function() {
-                $(this).parents('div.password').fadeOut(
-                        400, function() {$(this).html('');});
-            });
-            pw.fadeIn();
+            pw.slideDown();
             setTimeout(function(){pwc.click();}, 30000);
         });
     },
