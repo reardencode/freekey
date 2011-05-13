@@ -257,7 +257,7 @@ FK.fn.lockget = function(data) {
             function(data){fk.locked(data);}, freekey_error);
 };
 FK.fn.locked = function(data) {
-    console.log("locked");
+    console.log('Mine', this.uuid, 'got', data);
     if (data !== this.uuid) {
         this.lockretry(data);
         return;
@@ -491,6 +491,7 @@ S3Bucket.prototype = {
         var verb = 'PUT';
         var headers = this.authHeaders(key, verb, md5, ct);
         headers['Content-MD5'] = md5;
+        headers['Cache-Control'] = 'no-cache';
         $.ajax(this.origin() + '/' + key, {
             type: verb,
             contentType: ct,
