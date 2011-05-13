@@ -3,13 +3,9 @@ FreeKey: It's freaky easy to manage your passwords.
 
 FreeKey is an easy way to manage all of your passwords.
 
-Here're some blog posts I've written about FreeKey
+[Here're some blog posts I've written about FreeKey](http://reardencode.posterous.com/tag/freekey)
 
-        http://reardencode.posterous.com/tag/freekey
-
-If you want to talk about FreeKey, try the Google Group
-
-        http://groups.google.com/groups/freekey-list
+[If you want to talk about FreeKey, try the Google Group](http://groups.google.com/groups/freekey-list)
 
 
 Status
