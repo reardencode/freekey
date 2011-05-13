@@ -810,11 +810,13 @@ $(document).ready(function() {
     if (window == window.top) {
         $(document.auth_form).submit(function(e) {
             $(this).submit(function(e) { return false; });
+            e.preventDefault();
             auth();
             return false;
         });
         $(document.conf_form).submit(function(e) {
             $(this).submit(function(e) { return false; });
+            e.preventDefault();
             conf();
             return false;
         });
