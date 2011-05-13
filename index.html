@@ -217,9 +217,13 @@ FK.fn.sync = function() {
         return;
     }
     this.syncing = true;
-    this.lock_tries = -1;
     freekey_status("Starting sync...");
-    this.lockretry();
+    if (!this.pack.modified) {
+        this.start_sync_list(false);
+    } else {
+        this.lock_tries = -1;
+        this.lockretry();
+    }
 };
 FK.fn.lockretry = function(data) {
     console.log("lockretry");
@@ -262,18 +266,23 @@ FK.fn.locked = function(data) {
         return;
     }
     freekey_status("Listing packs...");
+    this.start_sync_list(true);
+};
+FK.fn.start_sync_list = function(locked) {
     var fk = this;
     this.bucket.list('pack.',
-            function(data){fk.sync_list(data);}, freekey_error);
+            function(data){fk.sync_list(data, locked);}, freekey_error);
 };
-FK.fn.sync_list = function(data) {
+FK.fn.sync_list = function(data, locked) {
     console.log("sync_list");
     var list = $(data);
     this.lastlist = list;
     var lastkey = list.find('Contents Key').last().text();
     var version = lastkey==''?-1:this._version(lastkey);
     if (this.pack.version >= version) {
-        if (this.pack.modified) {
+        if (!locked) {
+            this.done();
+        } else if (this.pack.modified) {
             this.start_savepack();
         } else {
             this.unlock();
@@ -283,9 +292,9 @@ FK.fn.sync_list = function(data) {
     freekey_status("Merging newer pack...");
     var fk = this;
     this.bucket.get(lastkey,
-            function(data){fk.merge(version, data);}, freekey_error);
+            function(data){fk.merge(version, data, locked);}, freekey_error);
 };
-FK.fn.merge = function(version, pack) {
+FK.fn.merge = function(version, pack, locked) {
     console.log("merge");
     if (pack.packformat !== 1) {
         freekey_error("Newer FreeKey used on repo, upgrade first.");
@@ -298,6 +307,7 @@ FK.fn.merge = function(version, pack) {
         this.unlock();
         return;
     }
+    if (!locked) this.done();
     var mine = this.pack.contents, theirs = pack.contents;
     for (var k in theirs) {
         if (k in mine) {
