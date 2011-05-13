@@ -29,10 +29,10 @@ function freekey_start(data) {
     $('#unlock_button').click(function() {
         if (confirm("You sure you want to force unlock?")) freekey.unlock();
     });
-    var key = data[0];
+    var pass = data[0];
     var b = data[1];
     var bucket = new S3Bucket(b.bucket, b.access_key, b.secret_key);
-    window.freekey = new FK(key, bucket);
+    window.freekey = new FK(pass, bucket);
     $(document.add_form).submit(function(e) {
         e.preventDefault();
         var identifier = document.add_form.identifier.value;
@@ -46,20 +46,23 @@ function freekey_start(data) {
     });
 }
 
-function FKPack(key, pack, version) {
-    this.ciph = new sjcl.cipher.aes(key);
-    this.packformat = 1;
+function FKPack(pass, pack, version) {
     if (version === undefined) {
         this.version = 0;
     } else {
         this.version = version;
     }
     if (pack === undefined) {
+        this.packformat = 1;
+        var salt = sjcl.random.randomWords(2, 0);
+        this.salt = sjcl.codec.base64.fromBits(salt);
+        this.ciph = this._make_ciph(pass, salt);
         this.contents = {};
     } else {
-        var iv = pack.iv;
-        delete pack.iv;
-        iv = sjcl.codec.base64.toBits(iv);
+        this.packformat = pack.packformat;
+        this.salt = pack.salt;
+        this.ciph = this._make_ciph(pass, sjcl.codec.base64.toBits(pack.salt));
+        var iv = sjcl.codec.base64.toBits(pack.iv);
         pack.contents = sjcl.codec.base64.toBits(pack.contents);
         pack.contents = sjcl.mode.ccm.decrypt(this.ciph, pack.contents, iv);
         pack.contents = sjcl.codec.utf8String.fromBits(pack.contents);
@@ -70,9 +73,14 @@ function FKPack(key, pack, version) {
 }
 
 FKPack.prototype = {
+    _make_ciph: function(pass, salt) {
+        var key = sjcl.misc.pbkdf2(pass, salt, 10000, 256);
+        return new sjcl.cipher.aes(key);
+    },
     serialize: function() {
         var out = {};
         out.packformat = this.packformat;
+        out.salt = this.salt;
         out.contents = JSON.stringify(this.contents);
         var iv = sjcl.random.randomWords(4,0);
         out.iv = sjcl.codec.base64.fromBits(iv);
@@ -164,9 +172,9 @@ FKPack.prototype = {
     }
 };
 
-function FK(key, bucket) {
+function FK(pass, bucket) {
     this.uuid = sjcl.codec.base64.fromBits(sjcl.random.randomWords(4,0));
-    this.key = key;
+    this.pass = pass;
     this.bucket = bucket;
     this.syncing = false;
     this.init();
@@ -344,6 +352,7 @@ FK.fn.done = function(show) {
     } else {
         freekey_status();
     }
+    $('#password_entry').fadeIn();
     if (this.sync_timer) clearTimeout(this.sync_timer);
     var fk = this;
     this.sync_timer = setTimeout(function(){fk.sync();}, 5000);
@@ -358,15 +367,14 @@ FK.fn.init_list = function(data) {
                 function(data){fk.init_load(version, data);}, freekey_error);
         return;
     }
-    this.pack = new FKPack(this.key);
+    this.pack = new FKPack(this.pass);
     this.done();
 };
 FK.fn.init_load = function(version, data) {
     console.log("init_load");
     if (data.packformat !== 1)
         freekey_error("Newer FreeKey used on repo, upgrade first.");
-    this.pack = new FKPack(this.key, data, version);
-    $('#password_entry').fadeIn();
+    this.pack = new FKPack(this.pass, data, version);
     this.done();
 };
 
@@ -682,23 +690,23 @@ $(document).ready(function() {
         }
         $('#'+id).slideDown();
     }
-    function iframe(key, rc) {
+    function iframe(pass, rc) {
         var bucket = new S3Bucket(rc.s3_bucket, rc.aws_access, rc.aws_secret);
         var origin = bucket.origin();
-        var s3key = 'index.html';
+        var key = 'index.html';
         $('#main').load(function() {
             $(this).unbind('load');
             $.postmsg.listen(origin, 'loaded', function() {
                 $('#init').hide();
                 $('body').css('padding',0).css('margin',0);
                 $('#main').css('width','100%').css('height','100%').fadeIn();
-                return [key, bucket];
+                return [pass, bucket];
             });
             window.onbeforeunload = function() {
                 return "Are you sure you want to leave?  You will need to" +
                     " reenter your password to continue using FreeKey.";
             };
-            this.contentWindow.location = bucket.uri(s3key, 5);
+            this.contentWindow.location = bucket.uri(key, 5);
         });
         var html = '<html>' + $('html').html() + '</html>';
         var expires = new Date();
@@ -707,14 +715,14 @@ $(document).ready(function() {
             "expiration": expires,
             "conditions": [
                 {bucket: bucket.bucket },
-                {key: s3key},
+                {key: key},
                 {'Content-Type': 'text/html'},
                 {'redirect': origin}
             ]
         };
         policy = sjcl.codec.base64.fromBits(
                 sjcl.codec.utf8String.toBits(JSON.stringify(policy)));
-        document.awsform.key.value = s3key;
+        document.awsform.key.value = key;
         document.awsform.policy.value = policy;
         document.awsform.file.value = html;
         document.awsform.AWSAccessKeyId.value = bucket.access_key;
@@ -735,7 +743,7 @@ $(document).ready(function() {
             var pt = sjcl.mode.ccm.decrypt(ciph, erc.value, erc.iv);
             var json = sjcl.codec.utf8String.fromBits(pt);
             var rc = JSON.parse(json);
-            iframe(key, rc);
+            iframe(pass, rc);
         } catch (ex) {
             if (ex.toString().indexOf('CORRUPT: ') === 0) {
                 show_init('auth', 'Incorrect password');
@@ -769,7 +777,7 @@ $(document).ready(function() {
             erc.value = sjcl.codec.base64.fromBits(erc.value);
             erc.iv = sjcl.codec.base64.fromBits(erc.iv);
             localStorage.setItem('freekey-rc', JSON.stringify(erc));
-            iframe(key, rc);
+            iframe(pass, rc);
         } catch (ex) {
             show_init('conf', ex.toString());
         }
