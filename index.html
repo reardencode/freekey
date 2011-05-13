@@ -106,11 +106,12 @@ FKPack.prototype = {
         for (var k in this.contents) {
             var kd = JSON.parse(k);
             kd = kd[1] + '@' + kd[0];
-            npl.push(['<div><span class="key">',k,'</span>',kd,'<div class="password"></div></div>'].join(''));
+            npl.push(['<div><div class="identifier"><span class="key">',k,'</span>',
+                    kd,'</div><div class="password"></div></div>'].join(''));
         }
         pl.html(npl.join('\n'));
         var fkp = this;
-        pl.find('div').click(function() {
+        pl.find('div.identifier').click(function() {
             var item = $(this);
             var k = item.find('span.key').text();
             var pl = fkp._get(k);
@@ -122,18 +123,19 @@ FKPack.prototype = {
                 ];
                 opl.push(s.join(''));
             }
-            var pw = item.find('div.password');
+            var pw = item.parent().find('div.password');
             pw.html(opl.join(''));
             pw.find('div.password_del').click(function() {
                 var p = $(this).parent();
                 fkp.del(k, p.find('span.key').text());
                 p.html('');
-                if (p.text() == '') pb.fadeOut();
+                var pc = p.parent();
+                if (pc.text() == '') pc.fadeOut();
             });
             var pwc = pw.find('div.password_close');
             pwc.click(function() {
-                $(this).parent().fadeOut(400, function() {$(this).html('');});
-                console.log($(this).parent());
+                $(this).parents('div.password').fadeOut(
+                        400, function() {$(this).html('');});
             });
             pw.fadeIn();
             setTimeout(function(){pwc.click();}, 30000);
