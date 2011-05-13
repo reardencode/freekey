@@ -56,9 +56,6 @@ function freekey_start(data) {
         document.add_form.reset();
         freekey.pack.add(identifier, username, password);
     });
-    $('#password_close').click(function() {
-        $('#password_box').fadeOut(400, function() {$('#password').html('');})
-    });
 }
 
 function FKPack(pass, pack, version) {
@@ -109,14 +106,16 @@ FKPack.prototype = {
         for (var k in this.contents) {
             var kd = JSON.parse(k);
             kd = kd[1] + '@' + kd[0];
-            npl.push('<div><span class="key">'+k+'</span>'+kd+'</div>');
+            npl.push(['<div><div class="identifier"><span class="key">',k,'</span>',
+                    kd,'</div><div class="password"></div></div>'].join(''));
         }
         pl.html(npl.join('\n'));
         var fkp = this;
-        pl.find('div').click(function() {
-            var k = $(this).find('span.key').text();
+        pl.find('div.identifier').click(function() {
+            var item = $(this);
+            var k = item.find('span.key').text();
             var pl = fkp._get(k);
-            var opl = [];
+            var opl = ['<div class="password_close"></div>'];
             for (var i=0; i<pl.length; i++) {
                 var s = [
                     '<div>', '<span class="key">', i, '</span>',
@@ -124,23 +123,23 @@ FKPack.prototype = {
                 ];
                 opl.push(s.join(''));
             }
-            var pw = $('#password');
+            var pw = item.parent().find('div.password');
             pw.html(opl.join(''));
             pw.find('div.password_del').click(function() {
                 var p = $(this).parent();
                 fkp.del(k, p.find('span.key').text());
                 p.html('');
-                var pb = $('#password_box');
-                if (pb.text() == '') pb.fadeOut();
+                var pc = p.parent();
+                if (pc.text() == '') pc.fadeOut();
             });
-            $('#password_box').fadeIn();
-            fkp._autoclose();
+            var pwc = pw.find('div.password_close');
+            pwc.click(function() {
+                $(this).parents('div.password').fadeOut(
+                        400, function() {$(this).html('');});
+            });
+            pw.fadeIn();
+            setTimeout(function(){pwc.click();}, 30000);
         });
-    },
-    _autoclose: function() {
-        if (this._close_timer) clearTimeout(this._close_timer);
-        this._close_timer = setTimeout(
-                function() {$('#password_close').click();}, 30000);
     },
     del: function(k, i) {
         if (!(k in this.contents)) return;
@@ -550,34 +549,31 @@ S3Bucket.prototype = {
             div.content { float: left; padding: 5px; margin: 5px; }
             #password_pane { clear: left; }
             #password_entry { clear: right; display: none; }
-            #password_list div { padding: 5px; }
-            #password_list div:nth-child(even) { background-color: #bfffbf; }
-            #password_list div:nth-child(odd) { background-color: #bfbfff; }
+            #password_list > div { padding: 5px; }
+            #password_list > div:nth-child(even) { background-color: #bfffbf; }
+            #password_list > div:nth-child(odd) { background-color: #bfbfff; }
             #unlock_button { background-color: #bbbbbb; padding: 5px; }
             span.key { display: none; }
-            #password_box {
+            div.password {
                 background-color: #ffffbf;
                 display: none;
-                float: left;
                 overflow: hidden;
                 padding: 5px;
-                width: 100%;
             }
-            #password_close {
+            div.password_close {
                 background-color: #ff0000;
                 float: right;
                 height: 10px;
                 margin: 5px;
                 width: 10px;
             }
-            .password_del {
+            div.password_del {
                 background-color: #ff0000;
                 float: left;
                 height: 5px;
                 margin: 5px;
                 width: 5px;
             }
-            #password { float: left; }
         </style>
     </head>
     <body>
