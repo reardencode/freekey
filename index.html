@@ -107,19 +107,26 @@ FKPack.prototype = {
             var kd = JSON.parse(k);
             kd = kd[1] + '@' + kd[0];
             npl.push(['<div><div class="identifier">',
-                    '<span class="key">',k,'</span>',kd,
+                    '<span class="key">',k,'</span>',
+                    kd,'<span class="del">delete</span>',
                     '</div><div class="password"></div></div>'].join(''));
         }
         pl.html(npl.join('\n'));
         var fkp = this;
+        pl.find('div.identifier div.del').click(function() {
+            var ident = $(this).parents('div.identifier');
+            fkp.del(ident.find('span.key').text());
+            ident.parent().remove();
+        });
         pl.find('div.identifier').click(function() {
             var ident = $(this);
-            var pws = fkp._get(ident.find('span.key').text());
-            var opl = ['<div class="password_close"></div>'];
+            var k = ident.find('span.key').text();
+            var pws = fkp._get(k);
+            var opl = ['<div class="password_close">close</div>'];
             for (var i=0; i<pws.length; i++) {
                 var s = [
                     '<div>', '<span class="key">', i, '</span>',
-                    '<div class="password_del"></div>', pws[i], '</div>'
+                    pws[i], '<span class="del">delete</span>', '</div>'
                 ];
                 opl.push(s.join(''));
             }
@@ -129,7 +136,7 @@ FKPack.prototype = {
             pwc.click(function() {
                 pw.slideUp(400, function() {$(this).empty();});
             });
-            pw.find('div.password_del').click(function() {
+            pw.find('div.del').click(function() {
                 var p = $(this).parent();
                 fkp.del(k, p.find('span.key').text());
                 p.remove();
@@ -559,29 +566,18 @@ S3Bucket.prototype = {
             #password_entry { clear: right; display: none; }
             #password_list > div { padding: 5px; }
             #password_list > div:nth-child(even) { background-color: #bfffbf; }
-            #password_list > div:nth-child(odd) { background-color: #bfbfff; }
+            #password_list > div:nth-child(odd) { background-color: #b0dfff; }
             #unlock_button { background-color: #bbbbbb; padding: 5px; }
             span.key { display: none; }
-            div.password {
+            .password {
                 background-color: #ffffbf;
                 display: none;
                 overflow: hidden;
                 padding: 5px;
             }
-            div.password_close {
-                background-color: #ff0000;
-                float: right;
-                height: 10px;
-                margin: 5px;
-                width: 10px;
-            }
-            div.password_del {
-                background-color: #ff0000;
-                float: left;
-                height: 5px;
-                margin: 5px;
-                width: 5px;
-            }
+            .password_close, .del { color: #af0000; font-size: 75%; }
+            .password_close { float: right; }
+            .del { padding: 0 5px; }
         </style>
     </head>
     <body>
@@ -630,10 +626,6 @@ S3Bucket.prototype = {
             <div id='status_holder'><div id='status'></div></div>
             <div class='clear'>Welcome to FreeKey!</div>
             <div class='content' id='password_pane'>
-                <div id='password_box' class='clear'>
-                    <div id='password_close'></div>
-                    <div id='password'></div>
-                </div>
                 <div id='password_list'></div>
             </div>
             <div class='content' id='password_entry'>
