@@ -215,8 +215,16 @@ FK.fn.init = function() {
     console.log("init");
     freekey_status("Initializing...");
     var fk = this;
-    this.bucket.list(
-            'pack.', function(data){fk.init_list(data);}, freekey_error);
+    this.bucket.list('pack.',
+            function(data){fk.init_list(data);},
+            function(data, s, x) {
+                if (data.status === 404) {
+                    fk.bucket.create(
+                        function(data){fk.init_list();}, freekey_error);
+                } else {
+                    freekey_error(data, s, x);
+                }
+            });
 };
 FK.fn.sync = function() {
     console.log("sync");
@@ -494,6 +502,18 @@ S3Bucket.prototype = {
                 sjcl.codec.utf8String.toBits(this.secret_key), sjcl.hash.sha1);
         return sjcl.codec.base64.fromBits(hm.encrypt(parts.join('\n')));
     },
+    create: function(success, error) {
+        var ct = 'application/octet-stream';
+        var verb = 'PUT';
+        var headers = this.authHeaders(key, verb, '', ct);
+        $.ajax(this.origin() + '/' + key, {
+            type: verb,
+            contentType: ct,
+            headers: headers,
+            success: success,
+            error: error
+        });
+    },
     del: function(key, success, error) {
         var verb = 'DELETE';
         $.ajax(this.origin() + '/' + key, {
@@ -528,7 +548,7 @@ S3Bucket.prototype = {
         this.putJson('?policy', policy, success, error);
     },
     delPolicy: function(success, error) {
-        this.putJson('?policy', this.make_policy('nothing'), success, error);
+        this.putJson('?policy', this.make_policy(['nothing']), success, error);
     },
     get: function(key, success, error) {
         $.ajax(this.origin() + '/' + key, {
@@ -571,15 +591,24 @@ S3Bucket.prototype = {
             #password_list > div { padding: 5px; }
             #password_list > div:nth-child(even) { background-color: #bfffbf; }
             #password_list > div:nth-child(odd) { background-color: #b0dfff; }
-            #unlock_button { background-color: #bbbbbb; padding: 5px; }
+            #unlock_button {
+                background-color: #bbbbbb;
+                cursor: pointer;
+                padding: 5px;
+            }
             span.key { display: none; }
+            .identifier { cursor: pointer; }
             .password {
                 background-color: #ffffbf;
                 display: none;
                 overflow: hidden;
                 padding: 5px;
             }
-            .password_close, .del { color: #af0000; font-size: 75%; }
+            .password_close, .del {
+                color: #af0000;
+                cursor: pointer;
+                font-size: 75%;
+            }
             .password_close { float: right; }
             .del { padding: 0 5px; }
         </style>
