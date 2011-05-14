@@ -46,7 +46,8 @@ function freekey_unload() {
 function freekey_start(data) {
     freekey_status("Loading...");
     $('#unlock_button').click(function() {
-        if (confirm("You sure you want to force unlock?")) freekey.unlock();
+        if (confirm("You sure you want to force unlock?"))
+            freekey.bucket.delPolicy();
     });
     var pass = data[0];
     var b = data[1];
@@ -158,8 +159,7 @@ FKPack.prototype = {
             this.contents[k].splice(i, 1);
             if (this.contents[k].length === 0) delete this.contents[k];
         }
-        this.modified = true;
-        this.display();
+        this.set_modified(true);
     },
     _get: function(k) {
         var pl = this.contents[k] = this.contents[k] || [];
@@ -189,13 +189,20 @@ FKPack.prototype = {
         var iv = sjcl.random.randomWords(4,0);
         var v = iv.concat(sjcl.mode.ccm.encrypt(this.ciph, password, iv));
         pl.push(sjcl.codec.base64.fromBits(v));
-        this.modified = true;
-        this.display();
+        this.set_modified(true);
+    },
+    set_modified: function(value) {
+        this.modified = value;
+        if (value) {
+            $('.modified').fadeIn();
+            this.display();
+        } else {
+            $('.modified').fadeOut();
+        }
     }
 };
 
 function FK(pass, bucket) {
-    this.uuid = sjcl.codec.base64.fromBits(sjcl.random.randomWords(4,0));
     this.pass = pass;
     this.bucket = bucket;
     this.syncing = false;
@@ -230,6 +237,8 @@ FK.fn.sync = function() {
     if (!this.pack.modified) {
         this.start_sync_list(false);
     } else {
+        /* Generate UUID for each sync to ensure we are actually acquiring */
+        this.uuid = sjcl.codec.base64.fromBits(sjcl.random.randomWords(4,0));
         this.lock_tries = -1;
         this.lockretry();
     }
@@ -360,8 +369,8 @@ FK.fn.savepack = function(data) {
     var fk = this;
     this.bucket.putJson(this._key(this.pack.version+1), out,
             function(data){
-                fk.pack.modified = false;
                 fk.pack.version++;
+                fk.pack.set_modified(false);
                 fk.unlock(data);
             },
             function(data){fk.savepack(data);}, false);
@@ -578,6 +587,7 @@ S3Bucket.prototype = {
             }
             span.key { display: none; }
             .identifier { cursor: pointer; }
+            .modified { color: #af0000; display: none; }
             .password {
                 background-color: #ffffbf;
                 display: none;
@@ -638,6 +648,7 @@ S3Bucket.prototype = {
             <div id='error'></div>
             <div id='status_holder'><div id='status'></div></div>
             <div class='clear'>Welcome to FreeKey!</div>
+            <div class='clear modified'>Unsaved changes!</div>
             <div class='content' id='password_pane'>
                 <div id='password_list'></div>
             </div>
