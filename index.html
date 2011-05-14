@@ -123,7 +123,7 @@ FKPack.prototype = {
         var id_del = $(del).click(function() {
             var ident = $(this).parents('div.identifier');
             fkp.del(ident.find('span.key').text());
-            ident.parent().remove();
+            ident.parent().slideUp(400, function() {$(this).remove();});
         });
         id_div.append(key).append(id_del).click(function() {
             var ident = $(this);
