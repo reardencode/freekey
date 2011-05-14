@@ -17,6 +17,30 @@ http://www.opensource.org/licenses/bsd-license
     <head>
         <script type="text/javascript">
 "use strict";
+function freekey_ciph(pass, salt) {
+    return new sjcl.cipher.aes(sjcl.misc.pbkdf2(pass, salt, 1000, 256));
+}
+function freekey_decrypt(pass, o, n, out) {
+    for (var k in o)
+        if (typeof o[k] === 'string') o[k] = sjcl.codec.base64.toBits(o[k]);
+    var ciph = freekey_ciph(pass, o.salt);
+    var pt = sjcl.mode.ccm.decrypt(ciph, o[n], o.iv);
+    var ret = JSON.parse(sjcl.codec.utf8String.fromBits(pt));
+    if (!out) return ret;
+    out.ciph = ciph;
+    out.salt = o.salt;
+    out[n] = ret;
+}
+function freekey_encrypt(ciph, salt, data, n) {
+    var out = {
+        salt: salt,
+        iv: sjcl.random.randomWords(4,0)
+    };
+    var pt = sjcl.codec.utf8String.toBits(JSON.stringify(data));
+    out[n] = sjcl.mode.ccm.encrypt(ciph, pt, out.iv);
+    for (var k in out) out[k] = sjcl.codec.base64.fromBits(out[k]);
+    return out;
+}
 function freekey_error(message) {
     if (arguments.length > 1) {
         console.log(arguments[0]);
@@ -30,13 +54,13 @@ function freekey_error(message) {
 }
 function freekey_status(message) {
     if (message) {
-        $('#status').html(message).fadeIn();
+        $('#status').text(message).fadeIn();
     } else {
         $('#status').fadeOut(400, function(){$(this).empty();});
     }
 }
 function freekey_status_done(message) {
-    $('#status').html(message).fadeIn().
+    $('#status').text(message).fadeIn().
         delay(2000).fadeOut(400, function(){$(this).empty();});
 }
 function freekey_unload() {
@@ -46,7 +70,8 @@ function freekey_unload() {
 function freekey_start(data) {
     freekey_status("Loading...");
     $('#unlock_button').click(function() {
-        if (confirm("You sure you want to force unlock?")) freekey.unlock();
+        if (confirm("You sure you want to force unlock?"))
+            freekey.bucket.delPolicy();
     });
     var pass = data[0];
     var b = data[1];
@@ -70,85 +95,69 @@ function FKPack(pass, pack, version) {
     }
     if (pack === undefined) {
         this.packformat = 1;
-        var salt = sjcl.random.randomWords(2, 0);
-        this.salt = sjcl.codec.base64.fromBits(salt);
-        this.ciph = this._make_ciph(pass, salt);
+        this.salt = sjcl.random.randomWords(2, 0);
+        this.ciph = freekey_ciph(pass, salt);
         this.contents = {};
     } else {
         this.packformat = pack.packformat;
-        this.salt = pack.salt;
-        this.ciph = this._make_ciph(pass, sjcl.codec.base64.toBits(pack.salt));
-        var iv = sjcl.codec.base64.toBits(pack.iv);
-        pack.contents = sjcl.codec.base64.toBits(pack.contents);
-        pack.contents = sjcl.mode.ccm.decrypt(this.ciph, pack.contents, iv);
-        pack.contents = sjcl.codec.utf8String.fromBits(pack.contents);
-        this.contents = JSON.parse(pack.contents);
+        delete pack.packformat;
+        freekey_decrypt(pass, pack, 'contents', this);
     }
     this.modified = false;
 }
 
 FKPack.prototype = {
-    _make_ciph: function(pass, salt) {
-        var key = sjcl.misc.pbkdf2(pass, salt, 1000, 256);
-        return new sjcl.cipher.aes(key);
-    },
     serialize: function() {
-        var out = {};
+        var out = freekey_encrypt(
+                this.ciph, this.salt, this.contents, 'contents');
         out.packformat = this.packformat;
-        out.salt = this.salt;
-        out.contents = JSON.stringify(this.contents);
-        var iv = sjcl.random.randomWords(4,0);
-        out.iv = sjcl.codec.base64.fromBits(iv);
-        out.contents = sjcl.codec.utf8String.toBits(out.contents);
-        out.contents = sjcl.mode.ccm.encrypt(this.ciph, out.contents, iv);
-        out.contents = sjcl.codec.base64.fromBits(out.contents);
         return out;
     },
-    display: function() {
-        var pl = $('#password_list');
-        var npl = [];
-        for (var k in this.contents) {
-            var kd = JSON.parse(k);
-            kd = kd[1] + '@' + kd[0];
-            npl.push(['<div><div class="identifier">',
-                    '<span class="key">',k,'</span>',
-                    kd,'<span class="del">delete</span>',
-                    '</div><div class="password"></div></div>'].join(''));
-        }
-        pl.html(npl.join('\n'));
+    _make_entry: function(k) {
         var fkp = this;
-        pl.find('div.identifier .del').click(function() {
+        var del = '<span class="del">delete</span>';
+        var kd = JSON.parse(k);
+        kd = kd[1] + '@' + kd[0];
+        var key = $('<span class="key"></span>').text(k);
+        var id_div = $('<div class="identifier"></div>').text(kd);
+        var id_del = $(del).click(function() {
             var ident = $(this).parents('div.identifier');
             fkp.del(ident.find('span.key').text());
             ident.parent().remove();
         });
-        pl.find('div.identifier').click(function() {
+        id_div.append(key).append(id_del).click(function() {
             var ident = $(this);
             var k = ident.find('span.key').text();
             var pws = fkp._get(k);
-            var opl = ['<div class="password_close">close</div>'];
-            for (var i=0; i<pws.length; i++) {
-                var s = [
-                    '<div>', '<span class="key">', i, '</span>',
-                    pws[i], '<span class="del">delete</span>', '</div>'
-                ];
-                opl.push(s.join(''));
-            }
-            var pw = ident.parent().find('div.password');
-            pw.html(opl.join(''));
-            var pwc = pw.find('div.password_close');
+            var pw = ident.parent().find('div.password').empty();
+            var pwc = $('<div class="password_close">close</div>');
             pwc.click(function() {
                 pw.slideUp(400, function() {$(this).empty();});
             });
-            pw.find('.del').click(function() {
-                var p = $(this).parent();
-                fkp.del(k, p.find('span.key').text());
-                p.remove();
-                if (pw.text() == '') pwc.click();
-            });
+            pw.append(pwc);
+            for (var i=0; i<pws.length; i++) {
+                var key = $('<span class="key"></span>').text(i);
+                var d = $('<div></div>').text(pws[i]);
+                var pw_del = $(del).click(function() {
+                    var p = $(this).parent();
+                    fkp.del(k, p.find('span.key').text());
+                    p.remove();
+                    if (pw.text() == '') pwc.click();
+                });
+                pw.append(d.append(key).append(pw_del));
+            }
             pw.slideDown();
             setTimeout(function(){pwc.click();}, 30000);
         });
+        var pw_div = '<div class="password"></div>';
+        return $('<div></div>').append(id_div).append(pw_div);
+    },
+    display: function() {
+        var pl = $('#password_list').empty();
+        var keys = [];
+        for (var k in this.contents) { keys.push(k); }
+        keys.sort();
+        for (var i=0; i<keys.length; i++) { pl.append(this._make_entry(keys[i])); }
     },
     del: function(k, i) {
         if (!(k in this.contents)) return;
@@ -158,8 +167,7 @@ FKPack.prototype = {
             this.contents[k].splice(i, 1);
             if (this.contents[k].length === 0) delete this.contents[k];
         }
-        this.modified = true;
-        this.display();
+        this.set_modified(true);
     },
     _get: function(k) {
         var pl = this.contents[k] = this.contents[k] || [];
@@ -175,27 +183,64 @@ FKPack.prototype = {
     get: function(identifier, username) {
         return this._get(JSON.stringify([identifier, username]));
     },
+    _pw_encrypt: function(password, iv) {
+        var ct = iv.concat(sjcl.mode.ccm.encrypt(this.ciph, password, iv));
+        return sjcl.codec.base64.fromBits(ct);
+    },
+    _add: function(k) {
+        var n = this._make_entry(k).hide();
+        $('#password_list > div').each(function() {
+            var e = $(this);
+            if (e.find('.key').text() > k) { e.before(n); return false; }
+        });
+        n.slideDown();
+    },
     add: function(identifier, username, password) {
-        var k = JSON.stringify([identifier, username]);
+        var pl, k = JSON.stringify([identifier, username]);
         password = sjcl.codec.utf8String.toBits(password);
-        var pl = this.contents[k] = this.contents[k] || [];
-        for (var i=0; i<pl.length; i++) {
-            var v = sjcl.codec.base64.toBits(pl[i]);
-            var iv = v.splice(0,4);
-            var nv = iv.concat(sjcl.mode.ccm.encrypt(this.ciph, password, iv));
-            nv = sjcl.codec.base64.fromBits(nv);
-            if (nv == pl[i]) return;
+        if (k in this.contents) {
+            pl = this.contents[k];
+            for (var i=0; i<pl.length; i++) {
+                var v = sjcl.codec.base64.toBits(pl[i]);
+                if (this._pw_encrypt(password, v.slice(0,4)) == pl[i]) return;
+            }
+            $('div.identifier:contains('+k+')').parent().
+                    find('.password_close').click();
+        } else {
+            pl = this.contents[k] = [];
+            this._add(k);
         }
-        var iv = sjcl.random.randomWords(4,0);
-        var v = iv.concat(sjcl.mode.ccm.encrypt(this.ciph, password, iv));
-        pl.push(sjcl.codec.base64.fromBits(v));
-        this.modified = true;
-        this.display();
+        pl.push(this._pw_encrypt(password, sjcl.random.randomWords(4,0)));
+        this.set_modified(true);
+    },
+    merge: function(pack) {
+        for (var k in pack.contents) {
+            if (k in this.contents) {
+                for (var i=0; i<pack.contents[k].length; i++) {
+                    var v = pack.contents[k][i];
+                    if ($.inArray(v, this.contents[k])) continue;
+                    this.contents[k].push(v);
+                    $('div.identifier:contains('+k+')').parent().
+                            find('.password_close').click();
+                }
+            } else {
+                this.contents[k] = pack.contents[k];
+                this._add(k);
+            }
+        }
+        this.version = pack.version;
+    },
+    set_modified: function(value) {
+        this.modified = value;
+        if (value) {
+            $('.modified').fadeIn();
+        } else {
+            $('.modified').fadeOut();
+        }
     }
 };
 
 function FK(pass, bucket) {
-    this.uuid = sjcl.codec.base64.fromBits(sjcl.random.randomWords(4,0));
     this.pass = pass;
     this.bucket = bucket;
     this.syncing = false;
@@ -230,6 +275,8 @@ FK.fn.sync = function() {
     if (!this.pack.modified) {
         this.start_sync_list(false);
     } else {
+        /* Generate UUID for each sync to ensure we are actually acquiring */
+        this.uuid = sjcl.codec.base64.fromBits(sjcl.random.randomWords(4,0));
         this.lock_tries = -1;
         this.lockretry();
     }
@@ -317,19 +364,7 @@ FK.fn.merge = function(version, pack, locked) {
         return;
     }
     if (!locked) this.done();
-    var mine = this.pack.contents, theirs = pack.contents;
-    for (var k in theirs) {
-        if (k in mine) {
-            for (var i=0; i<theirs[k].length; i++) {
-                var v = theirs[k][i];
-                if (!$.inArray(v, mine[k])) mine[k].push(v);
-            }
-        } else {
-            mine[k] = theirs[k];
-        }
-    }
-    this.pack.version = pack.version;
-    this.pack.display();
+    this.pack.merge(pack);
     this.start_savepack();
 };
 FK.fn.start_savepack = function() {
@@ -360,8 +395,8 @@ FK.fn.savepack = function(data) {
     var fk = this;
     this.bucket.putJson(this._key(this.pack.version+1), out,
             function(data){
-                fk.pack.modified = false;
                 fk.pack.version++;
+                fk.pack.set_modified(false);
                 fk.unlock(data);
             },
             function(data){fk.savepack(data);}, false);
@@ -578,6 +613,7 @@ S3Bucket.prototype = {
             }
             span.key { display: none; }
             .identifier { cursor: pointer; }
+            .modified { color: #af0000; display: none; }
             .password {
                 background-color: #ffffbf;
                 display: none;
@@ -638,6 +674,7 @@ S3Bucket.prototype = {
             <div id='error'></div>
             <div id='status_holder'><div id='status'></div></div>
             <div class='clear'>Welcome to FreeKey!</div>
+            <div class='clear modified'>Unsaved changes!</div>
             <div class='content' id='password_pane'>
                 <div id='password_list'></div>
             </div>
@@ -720,9 +757,9 @@ $(document).ready(function() {
     function show_init(id, error) {
         $('.init').slideUp();
         if (error) {
-            $('#init_error').html(error).slideDown();
+            $('#init_error').text(error).slideDown();
         } else {
-            $('#init_error').html('').slideUp();
+            $('#init_error').empty().slideUp();
         }
         $('#'+id).slideDown();
     }
@@ -769,13 +806,7 @@ $(document).ready(function() {
             show_init('loading');
             var erc = JSON.parse(localStorage.getItem('freekey-rc'));
             var pass = document.auth_form.authpass.value;
-            var key = sjcl.misc.pbkdf2(pass, erc.salt, 1000, 256);
-            var ciph = new sjcl.cipher.aes(key);
-            erc.iv = sjcl.codec.base64.toBits(erc.iv);
-            erc.value = sjcl.codec.base64.toBits(erc.value);
-            var pt = sjcl.mode.ccm.decrypt(ciph, erc.value, erc.iv);
-            var json = sjcl.codec.utf8String.fromBits(pt);
-            var rc = JSON.parse(json);
+            var rc = freekey_decrypt(pass, erc, 'value');
             iframe(pass, rc);
         } catch (ex) {
             if (ex.toString().indexOf('CORRUPT: ') === 0) {
@@ -798,17 +829,8 @@ $(document).ready(function() {
                 aws_access: document.conf_form.aws_access.value,
                 aws_secret: document.conf_form.aws_secret.value
             };
-            var erc = {
-                salt: sjcl.random.randomWords(2,0),
-                iv: sjcl.random.randomWords(4,0)
-            };
-            var key = sjcl.misc.pbkdf2(pass, erc.salt, 1000, 256);
-            var ciph = new sjcl.cipher.aes(key);
-            var json = JSON.stringify(rc);
-            var pt = sjcl.codec.utf8String.toBits(json);
-            erc.value = sjcl.mode.ccm.encrypt(ciph, pt, erc.iv);
-            erc.value = sjcl.codec.base64.fromBits(erc.value);
-            erc.iv = sjcl.codec.base64.fromBits(erc.iv);
+            var salt = sjcl.random.randomWords(2,0);
+            var erc = freekey_encrypt(ciph, salt, rc, 'value');
             localStorage.setItem('freekey-rc', JSON.stringify(erc));
             iframe(pass, rc);
         } catch (ex) {
