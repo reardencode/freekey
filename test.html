@@ -89,7 +89,7 @@ function FKPack(pass, pack, version) {
 
 FKPack.prototype = {
     _make_ciph: function(pass, salt) {
-        var key = sjcl.misc.pbkdf2(pass, salt, 10000, 256);
+        var key = sjcl.misc.pbkdf2(pass, salt, 1000, 256);
         return new sjcl.cipher.aes(key);
     },
     serialize: function() {
@@ -764,7 +764,7 @@ $(document).ready(function() {
             show_init('loading');
             var erc = JSON.parse(localStorage.getItem('freekey-rc'));
             var pass = document.auth_form.authpass.value;
-            var key = sjcl.misc.pbkdf2(pass, erc.salt, 10000, 256);
+            var key = sjcl.misc.pbkdf2(pass, erc.salt, 1000, 256);
             var ciph = new sjcl.cipher.aes(key);
             erc.iv = sjcl.codec.base64.toBits(erc.iv);
             erc.value = sjcl.codec.base64.toBits(erc.value);
@@ -799,7 +799,7 @@ $(document).ready(function() {
                 iv: sjcl.random.randomWords(4,0)
             };
             alert("about to make key");
-            var key = sjcl.misc.pbkdf2(pass, erc.salt, 10000, 256);
+            var key = sjcl.misc.pbkdf2(pass, erc.salt, 1000, 256);
             var ciph = new sjcl.cipher.aes(key);
             alert("about to stringify rc");
             var json = JSON.stringify(rc);
