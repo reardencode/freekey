@@ -54,13 +54,13 @@ function freekey_error(message) {
 }
 function freekey_status(message) {
     if (message) {
-        $('#status').html(message).fadeIn();
+        $('#status').text(message).fadeIn();
     } else {
         $('#status').fadeOut(400, function(){$(this).empty();});
     }
 }
 function freekey_status_done(message) {
-    $('#status').html(message).fadeIn().
+    $('#status').text(message).fadeIn().
         delay(2000).fadeOut(400, function(){$(this).empty();});
 }
 function freekey_unload() {
@@ -113,51 +113,51 @@ FKPack.prototype = {
         out.packformat = this.packformat;
         return out;
     },
-    display: function() {
-        var pl = $('#password_list');
-        var npl = [];
-        for (var k in this.contents) {
-            var kd = JSON.parse(k);
-            kd = kd[1] + '@' + kd[0];
-            npl.push(['<div><div class="identifier">',
-                    '<span class="key">',k,'</span>',
-                    kd,'<span class="del">delete</span>',
-                    '</div><div class="password"></div></div>'].join(''));
-        }
-        pl.html(npl.join('\n'));
+    _make_entry: function(k) {
         var fkp = this;
-        pl.find('div.identifier .del').click(function() {
+        var del = '<span class="del">delete</span>';
+        var kd = JSON.parse(k);
+        kd = kd[1] + '@' + kd[0];
+        var key = $('<span class="key"></span>').text(k);
+        var id_div = $('<div class="identifier"></div>').text(kd);
+        var id_del = $(del).click(function() {
             var ident = $(this).parents('div.identifier');
             fkp.del(ident.find('span.key').text());
             ident.parent().remove();
         });
-        pl.find('div.identifier').click(function() {
+        id_div.append(key).append(id_del).click(function() {
             var ident = $(this);
             var k = ident.find('span.key').text();
             var pws = fkp._get(k);
-            var opl = ['<div class="password_close">close</div>'];
-            for (var i=0; i<pws.length; i++) {
-                var s = [
-                    '<div>', '<span class="key">', i, '</span>',
-                    pws[i], '<span class="del">delete</span>', '</div>'
-                ];
-                opl.push(s.join(''));
-            }
-            var pw = ident.parent().find('div.password');
-            pw.html(opl.join(''));
-            var pwc = pw.find('div.password_close');
+            var pw = ident.parent().find('div.password').empty();
+            var pwc = $('<div class="password_close">close</div>');
             pwc.click(function() {
                 pw.slideUp(400, function() {$(this).empty();});
             });
-            pw.find('.del').click(function() {
-                var p = $(this).parent();
-                fkp.del(k, p.find('span.key').text());
-                p.remove();
-                if (pw.text() == '') pwc.click();
-            });
+            pw.append(pwc);
+            for (var i=0; i<pws.length; i++) {
+                var key = $('<span class="key"></span>').text(i);
+                var d = $('<div></div>').text(pws[i]);
+                var pw_del = $(del).click(function() {
+                    var p = $(this).parent();
+                    fkp.del(k, p.find('span.key').text());
+                    p.remove();
+                    if (pw.text() == '') pwc.click();
+                });
+                pw.append(d.append(key).append(pw_del));
+            }
             pw.slideDown();
             setTimeout(function(){pwc.click();}, 30000);
         });
+        var pw_div = '<div class="password"></div>';
+        return $('<div></div>').append(id_div).append(pw_div);
+    },
+    display: function() {
+        var pl = $('#password_list').empty();
+        var keys = [];
+        for (var k in this.contents) { keys.push(k); }
+        keys.sort();
+        for (var i=0; i<keys.length; i++) { pl.append(this._make_entry(keys[i])); }
     },
     del: function(k, i) {
         if (!(k in this.contents)) return;
@@ -187,22 +187,53 @@ FKPack.prototype = {
         var ct = iv.concat(sjcl.mode.ccm.encrypt(this.ciph, password, iv));
         return sjcl.codec.base64.fromBits(ct);
     },
+    _add: function(k) {
+        var n = this._make_entry(k).hide();
+        $('#password_list > div').each(function() {
+            var e = $(this);
+            if (e.find('.key').text() > k) { e.before(n); return false; }
+        });
+        n.slideDown();
+    },
     add: function(identifier, username, password) {
-        var k = JSON.stringify([identifier, username]);
+        var pl, k = JSON.stringify([identifier, username]);
         password = sjcl.codec.utf8String.toBits(password);
-        var pl = this.contents[k] = this.contents[k] || [];
-        for (var i=0; i<pl.length; i++) {
-            var v = sjcl.codec.base64.toBits(pl[i]);
-            if (this._pw_encrypt(password, v.slice(0,4)) == pl[i]) return;
+        if (k in this.contents) {
+            pl = this.contents[k];
+            for (var i=0; i<pl.length; i++) {
+                var v = sjcl.codec.base64.toBits(pl[i]);
+                if (this._pw_encrypt(password, v.slice(0,4)) == pl[i]) return;
+            }
+            $('div.identifier:contains('+k+')').parent().
+                    find('.password_close').click();
+        } else {
+            pl = this.contents[k] = [];
+            this._add(k);
         }
         pl.push(this._pw_encrypt(password, sjcl.random.randomWords(4,0)));
         this.set_modified(true);
+    },
+    merge: function(pack) {
+        for (var k in pack.contents) {
+            if (k in this.contents) {
+                for (var i=0; i<pack.contents[k].length; i++) {
+                    var v = pack.contents[k][i];
+                    if ($.inArray(v, this.contents[k])) continue;
+                    this.contents[k].push(v);
+                    $('div.identifier:contains('+k+')').parent().
+                            find('.password_close').click();
+                }
+            } else {
+                this.contents[k] = pack.contents[k];
+                this._add(k);
+            }
+        }
+        this.version = pack.version;
     },
     set_modified: function(value) {
         this.modified = value;
         if (value) {
             $('.modified').fadeIn();
-            this.display();
         } else {
             $('.modified').fadeOut();
         }
@@ -333,19 +364,7 @@ FK.fn.merge = function(version, pack, locked) {
         return;
     }
     if (!locked) this.done();
-    var mine = this.pack.contents, theirs = pack.contents;
-    for (var k in theirs) {
-        if (k in mine) {
-            for (var i=0; i<theirs[k].length; i++) {
-                var v = theirs[k][i];
-                if (!$.inArray(v, mine[k])) mine[k].push(v);
-            }
-        } else {
-            mine[k] = theirs[k];
-        }
-    }
-    this.pack.version = pack.version;
-    this.pack.display();
+    this.pack.merge(pack);
     this.start_savepack();
 };
 FK.fn.start_savepack = function() {
@@ -738,9 +757,9 @@ $(document).ready(function() {
     function show_init(id, error) {
         $('.init').slideUp();
         if (error) {
-            $('#init_error').html(error).slideDown();
+            $('#init_error').text(error).slideDown();
         } else {
-            $('#init_error').html('').slideUp();
+            $('#init_error').empty().slideUp();
         }
         $('#'+id).slideDown();
     }
