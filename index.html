@@ -528,7 +528,7 @@ S3Bucket.prototype = {
         this.putJson('?policy', policy, success, error);
     },
     delPolicy: function(success, error) {
-        this.del('?policy', success, error);
+        this.putJson('?policy', this.make_policy('nothing'), success, error);
     },
     get: function(key, success, error) {
         $.ajax(this.origin() + '/' + key, {
