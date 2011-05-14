@@ -709,7 +709,6 @@ a.clientX||a.offsetX,a.y||a.clientY||a.offsetY],2,"mouse")},p:function(){sjcl.ra
 "use strict";
 $(document).ready(function() {
     function show_init(id, error) {
-        alert("show_init" + id + ':' + error);
         $('.init').slideUp();
         if (error) {
             $('#init_error').html(error).slideDown();
@@ -733,7 +732,9 @@ $(document).ready(function() {
             window.onbeforeunload = freekey_unload;
             this.contentWindow.location = bucket.uri(key, 5);
         });
+        alert("about to get html");
         var html = '<html>' + $('html').html() + '</html>';
+        alert("about to create policy");
         var expires = new Date();
         expires.setTime(expires.getTime() + 5000);
         var policy = {
@@ -747,12 +748,14 @@ $(document).ready(function() {
         };
         policy = sjcl.codec.base64.fromBits(
                 sjcl.codec.utf8String.toBits(JSON.stringify(policy)));
+        alert("about to setup awsform");
         document.awsform.key.value = key;
         document.awsform.policy.value = policy;
         document.awsform.file.value = html;
         document.awsform.AWSAccessKeyId.value = bucket.access_key;
         document.awsform.signature.value = bucket.sign(policy);
         document.awsform.redirect.value = origin;
+        alert("about to submit awsform");
         $('#awsform').attr('action',origin).attr('method','post').submit();
         document.awsform.file.value = '';
     }
@@ -790,18 +793,27 @@ $(document).ready(function() {
                 aws_access: document.conf_form.aws_access.value,
                 aws_secret: document.conf_form.aws_secret.value
             };
+            alert("about to make salt and iv");
             var erc = {
                 salt: sjcl.random.randomWords(2,0),
                 iv: sjcl.random.randomWords(4,0)
             };
+            alert("about to make key");
             var key = sjcl.misc.pbkdf2(pass, erc.salt, 10000, 256);
             var ciph = new sjcl.cipher.aes(key);
+            alert("about to stringify rc");
             var json = JSON.stringify(rc);
+            alert("about to bitify rc");
             var pt = sjcl.codec.utf8String.toBits(json);
+            alert("about to encrypt");
             erc.value = sjcl.mode.ccm.encrypt(ciph, pt, erc.iv);
+            alert("about to base64 erc.value");
             erc.value = sjcl.codec.base64.fromBits(erc.value);
+            alert("about to base64 erc.iv");
             erc.iv = sjcl.codec.base64.fromBits(erc.iv);
+            alert("about to store result");
             localStorage.setItem('freekey-rc', JSON.stringify(erc));
+            alert("calling iframe");
             iframe(pass, rc);
         } catch (ex) {
             show_init('conf', ex.toString());
@@ -818,7 +830,6 @@ $(document).ready(function() {
         $(document.conf_form).submit(function(e) {
             $(this).submit(function(e) { return false; });
             e.preventDefault();
-            alert("conf_form submitted");
             conf();
             return false;
         });
