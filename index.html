@@ -216,15 +216,7 @@ FK.fn.init = function() {
     freekey_status("Initializing...");
     var fk = this;
     this.bucket.list('pack.',
-            function(data){fk.init_list(data);},
-            function(data, s, x) {
-                if (data.status === 404) {
-                    fk.bucket.create(
-                        function(data){fk.init_list();}, freekey_error);
-                } else {
-                    freekey_error(data, s, x);
-                }
-            });
+            function(data){fk.init_list(data);}, freekey_error);
 };
 FK.fn.sync = function() {
     console.log("sync");
@@ -501,18 +493,6 @@ S3Bucket.prototype = {
         var hm = new sjcl.misc.hmac(
                 sjcl.codec.utf8String.toBits(this.secret_key), sjcl.hash.sha1);
         return sjcl.codec.base64.fromBits(hm.encrypt(parts.join('\n')));
-    },
-    create: function(success, error) {
-        var ct = 'application/octet-stream';
-        var verb = 'PUT';
-        var headers = this.authHeaders(key, verb, '', ct);
-        $.ajax(this.origin() + '/' + key, {
-            type: verb,
-            contentType: ct,
-            headers: headers,
-            success: success,
-            error: error
-        });
     },
     del: function(key, success, error) {
         var verb = 'DELETE';
