@@ -17,6 +17,30 @@ http://www.opensource.org/licenses/bsd-license
     <head>
         <script type="text/javascript">
 "use strict";
+function freekey_ciph(pass, salt) {
+    return new sjcl.cipher.aes(sjcl.misc.pbkdf2(pass, salt, 1000, 256));
+}
+function freekey_decrypt(pass, o, n, out) {
+    for (var k in o)
+        if (typeof o[k] === 'string') o[k] = sjcl.codec.base64.toBits(o[k]);
+    var ciph = freekey_ciph(pass, o.salt);
+    var pt = sjcl.mode.ccm.decrypt(ciph, o[n], o.iv);
+    var ret = JSON.parse(sjcl.codec.utf8String.fromBits(pt));
+    if (!out) return ret;
+    out.ciph = ciph;
+    out.salt = o.salt;
+    out[n] = ret;
+}
+function freekey_encrypt(ciph, salt, data, n) {
+    var out = {
+        salt: salt,
+        iv: sjcl.random.randomWords(4,0)
+    };
+    var pt = sjcl.codec.utf8String.toBits(JSON.stringify(data));
+    out[n] = sjcl.mode.ccm.encrypt(ciph, pt, out.iv);
+    for (var k in out) out[k] = sjcl.codec.base64.fromBits(out[k]);
+    return out;
+}
 function freekey_error(message) {
     if (arguments.length > 1) {
         console.log(arguments[0]);
@@ -71,38 +95,22 @@ function FKPack(pass, pack, version) {
     }
     if (pack === undefined) {
         this.packformat = 1;
-        var salt = sjcl.random.randomWords(2, 0);
-        this.salt = sjcl.codec.base64.fromBits(salt);
-        this.ciph = this._make_ciph(pass, salt);
+        this.salt = sjcl.random.randomWords(2, 0);
+        this.ciph = freekey_ciph(pass, salt);
         this.contents = {};
     } else {
         this.packformat = pack.packformat;
-        this.salt = pack.salt;
-        this.ciph = this._make_ciph(pass, sjcl.codec.base64.toBits(pack.salt));
-        var iv = sjcl.codec.base64.toBits(pack.iv);
-        pack.contents = sjcl.codec.base64.toBits(pack.contents);
-        pack.contents = sjcl.mode.ccm.decrypt(this.ciph, pack.contents, iv);
-        pack.contents = sjcl.codec.utf8String.fromBits(pack.contents);
-        this.contents = JSON.parse(pack.contents);
+        delete pack.packformat;
+        freekey_decrypt(pass, pack, 'contents', this);
     }
     this.modified = false;
 }
 
 FKPack.prototype = {
-    _make_ciph: function(pass, salt) {
-        var key = sjcl.misc.pbkdf2(pass, salt, 1000, 256);
-        return new sjcl.cipher.aes(key);
-    },
     serialize: function() {
-        var out = {};
+        var out = freekey_encrypt(
+                this.ciph, this.salt, this.contents, 'contents');
         out.packformat = this.packformat;
-        out.salt = this.salt;
-        out.contents = JSON.stringify(this.contents);
-        var iv = sjcl.random.randomWords(4,0);
-        out.iv = sjcl.codec.base64.fromBits(iv);
-        out.contents = sjcl.codec.utf8String.toBits(out.contents);
-        out.contents = sjcl.mode.ccm.encrypt(this.ciph, out.contents, iv);
-        out.contents = sjcl.codec.base64.fromBits(out.contents);
         return out;
     },
     display: function() {
@@ -175,20 +183,19 @@ FKPack.prototype = {
     get: function(identifier, username) {
         return this._get(JSON.stringify([identifier, username]));
     },
+    _pw_encrypt: function(password, iv) {
+        var ct = iv.concat(sjcl.mode.ccm.encrypt(this.ciph, password, iv));
+        return sjcl.codec.base64.fromBits(ct);
+    },
     add: function(identifier, username, password) {
         var k = JSON.stringify([identifier, username]);
         password = sjcl.codec.utf8String.toBits(password);
         var pl = this.contents[k] = this.contents[k] || [];
         for (var i=0; i<pl.length; i++) {
             var v = sjcl.codec.base64.toBits(pl[i]);
-            var iv = v.splice(0,4);
-            var nv = iv.concat(sjcl.mode.ccm.encrypt(this.ciph, password, iv));
-            nv = sjcl.codec.base64.fromBits(nv);
-            if (nv == pl[i]) return;
+            if (this._pw_encrypt(password, v.slice(0,4)) == pl[i]) return;
         }
-        var iv = sjcl.random.randomWords(4,0);
-        var v = iv.concat(sjcl.mode.ccm.encrypt(this.ciph, password, iv));
-        pl.push(sjcl.codec.base64.fromBits(v));
+        pl.push(this._pw_encrypt(password, sjcl.random.randomWords(4,0)));
         this.set_modified(true);
     },
     set_modified: function(value) {
@@ -780,13 +787,7 @@ $(document).ready(function() {
             show_init('loading');
             var erc = JSON.parse(localStorage.getItem('freekey-rc'));
             var pass = document.auth_form.authpass.value;
-            var key = sjcl.misc.pbkdf2(pass, erc.salt, 1000, 256);
-            var ciph = new sjcl.cipher.aes(key);
-            erc.iv = sjcl.codec.base64.toBits(erc.iv);
-            erc.value = sjcl.codec.base64.toBits(erc.value);
-            var pt = sjcl.mode.ccm.decrypt(ciph, erc.value, erc.iv);
-            var json = sjcl.codec.utf8String.fromBits(pt);
-            var rc = JSON.parse(json);
+            var rc = freekey_decrypt(pass, erc, 'value');
             iframe(pass, rc);
         } catch (ex) {
             if (ex.toString().indexOf('CORRUPT: ') === 0) {
@@ -809,17 +810,8 @@ $(document).ready(function() {
                 aws_access: document.conf_form.aws_access.value,
                 aws_secret: document.conf_form.aws_secret.value
             };
-            var erc = {
-                salt: sjcl.random.randomWords(2,0),
-                iv: sjcl.random.randomWords(4,0)
-            };
-            var key = sjcl.misc.pbkdf2(pass, erc.salt, 1000, 256);
-            var ciph = new sjcl.cipher.aes(key);
-            var json = JSON.stringify(rc);
-            var pt = sjcl.codec.utf8String.toBits(json);
-            erc.value = sjcl.mode.ccm.encrypt(ciph, pt, erc.iv);
-            erc.value = sjcl.codec.base64.fromBits(erc.value);
-            erc.iv = sjcl.codec.base64.fromBits(erc.iv);
+            var salt = sjcl.random.randomWords(2,0);
+            var erc = freekey_encrypt(ciph, salt, rc, 'value');
             localStorage.setItem('freekey-rc', JSON.stringify(erc));
             iframe(pass, rc);
         } catch (ex) {
