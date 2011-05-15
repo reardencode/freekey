@@ -197,15 +197,16 @@ FKPack.prototype = {
     },
     _add: function(k) {
         var n = this._make_entry(k).hide();
-        var pwl = $('#password_list > div');
-        if (pwl.length > 0) {
-            pwl.each(function() {
-                var e = $(this);
-                if (e.find('.key').text() > k) { e.before(n); return false; }
-            });
-        } else {
-            $('#password_list').append(n);
-        }
+        var added = false
+        $('#password_list > div').each(function() {
+            var e = $(this);
+            if (e.find('.key').text() > k) {
+                e.before(n);
+                added = true;
+                return false;
+            }
+        });
+        if (!added) $('#password_list').append(n);
         n.slideDown();
     },
     add: function(identifier, username, password) {
