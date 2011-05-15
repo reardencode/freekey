@@ -204,7 +204,7 @@ FKPack.prototype = {
                 if (e.find('.key').text() > k) { e.before(n); return false; }
             });
         } else {
-            pwl.append(n);
+            $('#password_list').append(n);
         }
         n.slideDown();
     },
