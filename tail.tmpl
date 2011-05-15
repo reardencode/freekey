@@ -1,0 +1,110 @@
+        <style>
+            div.init { display: none; }
+            div.main { float: left; display: none; overflow: hidden; }
+            div.init_button { width: 20em; text-align: center; clear: both; }
+            div.init_label { width: 8em; clear: left; float: left; }
+            div.init_input { width: 12em; clear: right; float: left; }
+            #main { border: none; margin: 0; padding: 0; display: none; }
+            #init_error { color: #a02020; }
+            #status_holder { width: 100%; height: 2em; }
+            #status, #error {
+                background-color: #d0d0d0;
+                margin: 0 auto;
+                text-align: center;
+            }
+            #error { display: none border: 1px solid #d06060; color: #d06060; }
+            #status { border: 1px solid #6060d0; color: #6060d0; }
+            .clear { clear: both; }
+            div.content { float: left; padding: 5px; margin: 5px; }
+            #password_pane { clear: left; }
+            #password_entry { clear: right; display: none; }
+            #password_list > div { padding: 5px; }
+            #password_list > div:nth-child(even) { background-color: #bfffbf; }
+            #password_list > div:nth-child(odd) { background-color: #b0dfff; }
+            #unlock_button {
+                background-color: #bbbbbb;
+                cursor: pointer;
+                padding: 5px;
+            }
+            span.key { display: none; }
+            .identifier { cursor: pointer; }
+            .modified { color: #af0000; display: none; }
+            .password {
+                background-color: #ffffbf;
+                display: none;
+                overflow: hidden;
+                padding: 5px;
+            }
+            .password_close, .del {
+                color: #af0000;
+                cursor: pointer;
+                font-size: 75%;
+            }
+            .password_close { float: right; }
+            .del { padding: 0 5px; }
+        </style>
+    </head>
+    <body>
+        <div id='init'>
+            <div class='init' id='init_error'></div>
+            <div class='init' id='loading'>
+                Loading FreeKey...
+            </div>
+            <div class='init' id='conf'>
+                <form name='conf_form'>
+                    <div class='init_label'><label for="s3_bucket">S3 Bucket:</label></div>
+                    <div class='init_input'><input type="text" name="s3_bucket" value=""/></div>
+                    <div class='init_label'><label for="aws_access">AWS Access Key:</label></div>
+                    <div class='init_input'><input type="text" name="aws_access" value=""/></div>
+                    <div class='init_label'><label for="aws_secret">AWS Secret Key:</label></div>
+                    <div class='init_input'><input type="password" name="aws_secret" value=""/></div>
+                    <div class='init_label'><label for="passphrase">Pass phrase:</label></div>
+                    <div class='init_input'><input type="password" name="passphrase" value=""/></div>
+                    <div class='init_label'><label for="passphrase2">Pass phrase (again):</label></div>
+                    <div class='init_input'><input type="password" name="passphrase2" value=""/></div>
+                    <div class="init_button"><input type="submit" name="start" value="Start FreeKey"/></div>
+                </form>
+            </div>
+            <div class='init' id='auth'>
+                <form name='auth_form'>
+                    <div class='init_label'><label for="authpass">Pass phrase:</label></div>
+                    <div class='init_input'><input type="password" name="authpass" value=""/></div>
+                    <div class="init_button"><input type="submit" name="start" value="Start FreeKey"/></div>
+                </form>
+            </div>
+            <div class='init'>
+                <form name='awsform' id='awsform' target='main' enctype='multipart/form-data'>
+                    <input type='hidden' name='key'/>
+                    <input type='hidden' name='AWSAccessKeyId'/>
+                    <input type='hidden' name='policy'/>
+                    <input type='hidden' name='signature'/>
+                    <input type='hidden' name='redirect'/>
+                    <input type='hidden' name='Content-Type' value='text/html'/>
+                    <input type='textarea' name='file'/>
+                </form>
+            </div>
+        </div>
+        <iframe id='main'>FreeKey requires iFrames.</iframe>
+        <div class='main'>
+            <div id='error'></div>
+            <div id='status_holder'><div id='status'></div></div>
+            <div class='clear'>Welcome to FreeKey!</div>
+            <div class='clear modified'>Unsaved changes!</div>
+            <div class='content' id='password_pane'>
+                <div id='password_list'></div>
+            </div>
+            <div class='content' id='password_entry'>
+                <form name='add_form'>
+                    <div class='add_label'><label for="identifier">Identifier:</label></div>
+                    <div class='add_input'><input type="text" name="identifier" value=""/></div>
+                    <div class='add_label'><label for="username">Username:</label></div>
+                    <div class='add_input'><input type="text" name="username" value=""/></div>
+                    <div class='add_label'><label for="password">Password:</label></div>
+                    <div class='add_input'><input type="password" name="password" value=""/></div>
+                    <div class="add_button"><input type="submit" name="add" value="Add password"/></div>
+                </form>
+            </div>
+            <div id='unlock_button' class='clear'>Manual unlock</div>
+        </div>
+    </body>
+</html>

@@ -43,3 +43,5 @@ Dependencies
 ------------
 
  - Modern browser with localStorage and GET/POST/PUT/DELETE ajax support
+ - To build FreeKey from scratch requires a jQuery and SJCL.  For simplicity
+   both of these dependencies are included in an intermediate file checked in.
