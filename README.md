@@ -7,6 +7,9 @@ FreeKey is an easy way to manage all of your passwords.
 
 [If you want to talk about FreeKey, try the Google Group](http://groups.google.com/group/freekey-list)
 
+[Click here](http://reardencode.github.com/freekey) to give FreeKey a try.
+
+To build FreeKey from a git checkout, you just need Java (to run [Closure](http://code.google.com/closure/)).  Just check it out and run ./build.sh .  The resulting index.html is a complete FreeKey, open it in your browser and have fun.
 
 Status
 ------
@@ -43,5 +46,5 @@ Dependencies
 ------------
 
  - Modern browser with localStorage and GET/POST/PUT/DELETE ajax support
- - To build FreeKey from scratch requires a jQuery and SJCL.  For simplicity
-   both of these dependencies are included in an intermediate file checked in.
+ - FreeKey uses SJCL and jQuery, both of these are included in the source
+ repository for convenience.
