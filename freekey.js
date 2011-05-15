@@ -19,7 +19,7 @@ var fksjcl = {
         encrypt: sjcl.mode.ccm.encrypt
     },
     aes: sjcl.cipher.aes,
-    randomWords: sjcl.random.randomWords
+    random: sjcl.random
 }
 function freekey_ciph(pass, salt) {
     return new fksjcl.aes(sjcl.misc.pbkdf2(pass, salt, 1000, 256));
@@ -39,7 +39,7 @@ function freekey_decrypt(pass, o, n, out) {
 function freekey_encrypt(ciph, salt, data, n) {
     var out = {
         'salt': salt,
-        'iv': fksjcl.randomWords(4,0)
+        'iv': fksjcl.random.randomWords(4,0)
     };
     var pt = fksjcl.utf8String.toBits(JSON.stringify(data));
     out[n] = fksjcl.ccm.encrypt(ciph, pt, out['iv']);
@@ -103,7 +103,7 @@ function FKPack(pass, pack, version) {
     }
     if (pack === undefined) {
         this.packformat = 1;
-        this.salt = fksjcl.randomWords(2, 0);
+        this.salt = fksjcl.random.randomWords(2, 0);
         this.ciph = freekey_ciph(pass, salt);
         this.pwdb = {};
     } else {
@@ -223,7 +223,7 @@ FKPack.prototype = {
             pl = this.pwdb[k] = [];
             this._add(k);
         }
-        pl.push(this._pw_encrypt(password, fksjcl.randomWords(4,0)));
+        pl.push(this._pw_encrypt(password, fksjcl.random.randomWords(4,0)));
         this.set_modified(true);
     },
     merge: function(pack) {
@@ -292,7 +292,7 @@ FK.prototype = {
             return;
         }
         /* Generate UUID for each sync to ensure we are actually acquiring */
-        this.uuid = fksjcl.base64.fromBits(fksjcl.randomWords(4,0));
+        this.uuid = fksjcl.base64.fromBits(fksjcl.random.randomWords(4,0));
         this.lock_tries = -1;
         this.lockretry();
     },
@@ -363,7 +363,8 @@ FK.prototype = {
         freekey_status("Merging newer pack...");
         var fk = this;
         this.bucket.get(lastkey,
-                function(data){fk.merge(version, data, locked);}, freekey_error);
+                function(data){fk.merge(version, data, locked);},
+                freekey_error);
     },
     merge: function(version, pack, locked) {
         console.log("merge");
@@ -456,7 +457,8 @@ FK.prototype = {
             var version = this._version(key);
             var fk = this;
             this.bucket.get(key,
-                    function(data){fk.init_load(version, data);}, freekey_error);
+                    function(data){fk.init_load(version, data);},
+                    freekey_error);
             return;
         }
         this.pack = new FKPack(this.pass);
@@ -514,7 +516,8 @@ S3Bucket.prototype = {
             '&Expires=' + ds + '&Signature=' + encodeURIComponent(code);
     },
     sign: function(data) {
-        var hm = new fksjcl.hmac(fksjcl.utf8String.toBits(this.secret_key), fksjcl.sha1);
+        var hm = new fksjcl.hmac(
+                fksjcl.utf8String.toBits(this.secret_key), fksjcl.sha1);
         return fksjcl.base64.fromBits(hm.encrypt(data));
     },
     authHeaders: function(resource, verb, md5, type, amzheaders) {
@@ -681,7 +684,7 @@ $(document).ready(function() {
                 'aws_access': document['conf_form']['aws_access'].value,
                 'aws_secret': document['conf_form']['aws_secret'].value
             };
-            var salt = fksjcl.randomWords(2,0);
+            var salt = fksjcl.random.randomWords(2,0);
             var erc = freekey_encrypt(ciph, salt, rc, 'value');
             localStorage.setItem('freekey-rc', JSON.stringify(erc));
             iframe(pass, rc);
