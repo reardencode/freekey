@@ -101,32 +101,41 @@ function freekey_unload() {
         " reenter your password to continue using FreeKey.";
 };
 function freekey_start(data) {
-    freekey_status("Loading...");
-    $('#unlock_button').click(function() {
-        if (confirm("You sure you want to force unlock?"))
-            window.freekey.bucket.delPolicy();
-    });
-    var pass = data[0];
-    var b = data[1];
-    var bucket = new S3Bucket(b.bucket, b.access_key, b.secret_key);
-    window.freekey = new FK(pass, bucket);
     $(document['add_form']).submit(function(e) {
         e.preventDefault();
-        var identifier = document['add_form']['identifier'].value;
-        document['add_form']['identifier'].value = '';
-        var username = document['add_form']['username'].value;
-        document['add_form']['username'].value = '';
+
+        $(this).find('.error').remove();
+        var errors = $();
+
+        var identifier = $('#identifier').val();
+        if (identifier.length == 0) errors = errors.add($('#identifier'));
+
+        var username = $('#username').val();
+        if (username.length == 0) errors = errors.add($('#username'));
+
         var password;
         var type = $('input:radio[name="pwtype"]:checked').val();
         if (type == 'manual_password') {
-            password = document['add_form']['password'].value;
-            document['add_form']['password'].value = '';
+            password = $('#manpass').val();
+            if (password.length == 0) errors = errors.add($('#manpass'));
         } else {
-            var p = $('#password');
-            password = p.text();
-            p.empty();
+            password = $('#password').text();
+            if (password.length == 0) errors = errors.add($('#password'));
         }
-        if (password) window.freekey.pack.add(identifier, username, password);
+
+        if (errors.length > 0) {
+            errors.each(function() {
+                $(this).after('<span class="error">Required</span>');
+            });
+            return;
+        }
+
+        $('#identifier, #username, #manpass, #password').val('');
+        window.freekey.pack.add(identifier, username, password);
+    });
+    $('#unlock_button').click(function() {
+        if (confirm("You sure you want to force unlock?"))
+            window.freekey.bucket.delPolicy();
     });
     $('#password_type input').click(function() {
         $('div.password_type').hide();
@@ -135,37 +144,47 @@ function freekey_start(data) {
     var puncdiv = $('#pwpunc').empty();
     for (var i=0; i<chars.punctuation.length; i++) {
         var c = chars.punctuation[i];
-        var l = $('<span class="checked"></span>').text(c).click(function() {
-            var tl = $(this);
-            if (tl.hasClass('checked')) {
-                tl.removeClass('checked');
-                tl.addClass('unchecked');
-            } else {
-                tl.removeClass('unchecked');
-                tl.addClass('checked');
-            }
-        }).appendTo(puncdiv);
+        $('<span class="rt checked"></span>').text(c).appendTo(puncdiv);
     }
+    $('#random_password').find('span.rt').click(function() {
+        var tl = $(this);
+        if (tl.hasClass('checked')) {
+            tl.removeClass('checked');
+            tl.addClass('unchecked');
+        } else {
+            tl.removeClass('unchecked');
+            tl.addClass('checked');
+        }
+    });
     $('#pwlength').keydown(function(e) {
         // Allow backspace, delete and numbers
         if (e.keyCode != 46 && e.keyCode != 8 &&
             (e.keyCode < 48 || e.keyCode > 57 ))
             e.preventDefault(); 
     });
+    var pwtimer;
     $('#generate').click(function() {
         var length = $('#pwlength').val();
         var punc = $('#pwpunc span.checked').text(); 
         var charset = punc;
-        if ($('#pwcharup').prop('checked')) charset += chars.upper;
-        if ($('#pwcharlow').prop('checked')) charset += chars.lower;
-        if ($('#pwchardig').prop('checked')) charset += chars.digits;
+        if ($('#pwcharup').hasClass('checked')) charset += chars.upper;
+        if ($('#pwcharlow').hasClass('checked')) charset += chars.lower;
+        if ($('#pwchardig').hasClass('checked')) charset += chars.digits;
         var req = {};
-        if ($('#pwrequp').prop('checked')) req.upper = chars.upper;
-        if ($('#pwreqlow').prop('checked')) req.lower = chars.lower;
-        if ($('#pwreqdig').prop('checked')) req.digits = chars.digits;
-        if ($('#pwreqpunc').prop('checked')) req.punctuation = punc;
+        if ($('#pwrequp').hasClass('checked')) req.upper = chars.upper;
+        if ($('#pwreqlow').hasClass('checked')) req.lower = chars.lower;
+        if ($('#pwreqdig').hasClass('checked')) req.digits = chars.digits;
+        if ($('#pwreqpunc').hasClass('checked')) req.punctuation = punc;
+        if (pwtimer) clearTimer(pwtimer);
         $('#password').text(freekey_generate(length, charset, req));
+        pwtimer = setTimeout(function() { $('#password').empty(); }, 30000);
     });
+
+    freekey_status("Loading...");
+    var pass = data[0];
+    var b = data[1];
+    var bucket = new S3Bucket(b.bucket, b.access_key, b.secret_key);
+    window.freekey = new FK(pass, bucket);
 }
 
 /**

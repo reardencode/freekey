@@ -28,7 +28,7 @@
             }
             span.key { display: none; }
             .identifier { cursor: pointer; }
-            .modified { color: #af0000; display: none; }
+            .modified { color: #a02020; display: none; }
             .password {
                 background-color: #ffffbf;
                 display: none;
@@ -42,9 +42,11 @@
             }
             .password_close { float: right; }
             .del { padding: 0 5px; }
-            #pwpunc span { padding: 2px; margin: 1px; }
-            #pwpunc span.checked { background-color: #bfffbf; }
-            #pwpunc span.unchecked { background-color: #ffbfbf; }
+            #random_password span.rt { padding: 0 1px 2px 1px; border: 1px solid white; }
+            #random_password span.checked { background-color: #bfffbf; }
+            #random_password span.unchecked { background-color: #ffbfbf; }
+            .warning { color: #d05000; }
+            .error { font-weight: bold; color: #d02020; }
         </style>
     </head>
     <body>
@@ -113,8 +115,8 @@
                         <label for='pwtyperan'>Random</label>
                     </div>
                     <div id='manual_password' class='password_type'>
-                        <label for="password">Password:</label>
-                        <input type="password" name="password" value=""/>
+                        <label for="manpass">Password:</label>
+                        <input type="password" id='manpass' name="password" value=""/>
                     </div>
                     <div id='random_password' class='password_type'>
                         <div>Password: <span id='password'></span></div>
@@ -124,25 +126,19 @@
                         </div>
                         <div>Character set:</div>
                         <div>
-                            <input type='checkbox' id='pwcharup' name='pwchar' value='upper' checked/>
-                            <label for='pwcharup'>Upper case letters</label>
-                            <input type='checkbox' id='pwcharlow' name='pwchar' value='lower' checked/>
-                            <label for='pwcharlow'>Lower case letters</label>
-                            <input type='checkbox' id='pwchardig' name='pwchar' value='digit' checked/>
-                            <label for='pwchardig'>Digits</label>
+                            <span id='pwcharup' class='rt checked'>Upper case letters</span>
+                            <span id='pwcharlow' class='rt checked'>Lower case letters</span>
+                            <span id='pwchardig' class='rt checked'>Digits</span>
                         </div>
                         <div id='pwpunc'></div>
                         <div>At least one of:</div>
                         <div>
-                            <input type='checkbox' id='pwrequp' name='pwreq' value='upper' checked/>
-                            <label for='pwrequp'>Upper case letters</label>
-                            <input type='checkbox' id='pwreqlow' name='pwreq' value='lower' checked/>
-                            <label for='pwreqlow'>Lower case letters</label>
-                            <input type='checkbox' id='pwreqdig' name='pwreq' value='digit' checked/>
-                            <label for='pwreqdig'>Digits</label>
-                            <input type='checkbox' id='pwreqpunc' name='pwreq' value='punc' checked/>
-                            <label for='pwreqpunc'>Punctuation</label>
+                            <span id='pwrequp' class='rt checked'>Upper case letters</span>
+                            <span id='pwreqlow' class='rt checked'>Lower case letters</span>
+                            <span id='pwreqdig' class='rt checked'>Digits</span>
+                            <span id='pwreqpunc' class='rt checked'>Punctuation</span>
                         </div>
+                        <div class='warning'>Generated passwords disappear after 30 seconds.</div>
                         <div><input type="button" name="generate" id="generate" value="Generate"/></div>
                     </div>
                     <div><input type="submit" name="add" value="Add password"/></div>
