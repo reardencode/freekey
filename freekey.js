@@ -1,4 +1,10 @@
 /* This helps compression without combining compilation with sjcl */
+var chars = {
+    punctuation: '`~!@#$%^&*()-_=+[]{}\\|;:\'",<.>/?',
+    upper: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
+    lower: 'abcdefghijklmnopqrstuvwxyz',
+    digits: '0123456789'
+}
 var fksjcl = {
     sha1: sjcl.hash.sha1,
     hmac: sjcl.misc.hmac,
@@ -20,6 +26,28 @@ var fksjcl = {
     },
     aes: sjcl.cipher.aes,
     random: sjcl.random
+}
+function freekey_generate(length, charset, req) {
+    var out = '';
+    var tmp = 0;
+    var bag = [];
+    var special = {};
+    for (var i=0; i<length; i++) bag[i] = i;
+    for (var k in req) {
+        if (tmp < bag.length)
+            tmp = sjcl.random.randomWords(1,0)[0] & 0x7fffffff;
+        special[bag.splice(tmp % bag.length, 1)[0]] = k;
+        tmp = (tmp / (bag.length+1))|0;
+    }
+    for (var i=0; i<length; i++) {
+        var cs = charset;
+        if (i in special) cs = req[special[i]];
+        if (tmp < cs.length)
+            tmp = sjcl.random.randomWords(1,0)[0] & 0x7fffffff;
+        out += cs[tmp % cs.length];
+        tmp = (tmp / (cs.length+1))|0;
+    }
+    return out;
 }
 function freekey_ciph(pass, salt) {
     return new fksjcl.aes(sjcl.misc.pbkdf2(pass, salt, 1000, 256));
@@ -85,10 +113,58 @@ function freekey_start(data) {
     $(document['add_form']).submit(function(e) {
         e.preventDefault();
         var identifier = document['add_form']['identifier'].value;
+        document['add_form']['identifier'].value = '';
         var username = document['add_form']['username'].value;
-        var password = document['add_form']['password'].value;
-        document['add_form'].reset();
-        window.freekey.pack.add(identifier, username, password);
+        document['add_form']['username'].value = '';
+        var password;
+        var type = $('input:radio[name="pwtype"]:checked').val();
+        if (type == 'manual_password') {
+            password = document['add_form']['password'].value;
+            document['add_form']['password'].value = '';
+        } else {
+            var p = $('#password');
+            password = p.text();
+            p.empty();
+        }
+        if (password) window.freekey.pack.add(identifier, username, password);
+    });
+    $('#password_type input').click(function() {
+        $('div.password_type').hide();
+        $('#'+$(this).attr('value')).show();
+    }).first().click();
+    var puncdiv = $('#pwpunc').empty();
+    for (var i=0; i<chars.punctuation.length; i++) {
+        var c = chars.punctuation[i];
+        var l = $('<span class="checked"></span>').text(c).click(function() {
+            var tl = $(this);
+            if (tl.hasClass('checked')) {
+                tl.removeClass('checked');
+                tl.addClass('unchecked');
+            } else {
+                tl.removeClass('unchecked');
+                tl.addClass('checked');
+            }
+        }).appendTo(puncdiv);
+    }
+    $('#pwlength').keydown(function(e) {
+        // Allow backspace, delete and numbers
+        if (e.keyCode != 46 && e.keyCode != 8 &&
+            (e.keyCode < 48 || e.keyCode > 57 ))
+            e.preventDefault(); 
+    });
+    $('#generate').click(function() {
+        var length = $('#pwlength').val();
+        var punc = $('#pwpunc span.checked').text(); 
+        var charset = punc;
+        if ($('#pwcharup').prop('checked')) charset += chars.upper;
+        if ($('#pwcharlow').prop('checked')) charset += chars.lower;
+        if ($('#pwchardig').prop('checked')) charset += chars.digits;
+        var req = {};
+        if ($('#pwrequp').prop('checked')) req.upper = chars.upper;
+        if ($('#pwreqlow').prop('checked')) req.lower = chars.lower;
+        if ($('#pwreqdig').prop('checked')) req.digits = chars.digits;
+        if ($('#pwreqpunc').prop('checked')) req.punctuation = punc;
+        $('#password').text(freekey_generate(length, charset, req));
     });
 }
 

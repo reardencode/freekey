@@ -42,6 +42,9 @@
             }
             .password_close { float: right; }
             .del { padding: 0 5px; }
+            #pwpunc span { padding: 2px; margin: 1px; }
+            #pwpunc span.checked { background-color: #bfffbf; }
+            #pwpunc span.unchecked { background-color: #ffbfbf; }
         </style>
     </head>
     <body>
@@ -95,13 +98,54 @@
             </div>
             <div class='content' id='password_entry'>
                 <form name='add_form'>
-                    <div class='add_label'><label for="identifier">Identifier:</label></div>
-                    <div class='add_input'><input type="text" name="identifier" value=""/></div>
-                    <div class='add_label'><label for="username">Username:</label></div>
-                    <div class='add_input'><input type="text" name="username" value=""/></div>
-                    <div class='add_label'><label for="password">Password:</label></div>
-                    <div class='add_input'><input type="password" name="password" value=""/></div>
-                    <div class="add_button"><input type="submit" name="add" value="Add password"/></div>
+                    <div>
+                        <label for="identifier">Identifier:</label>
+                        <input type="text" id='identifier' name="identifier" value=""/>
+                    </div>
+                    <div>
+                        <label for="username">Username:</label>
+                        <input type="text" id='username' name="username" value=""/>
+                    </div>
+                    <div id='password_type'>
+                        <input type="radio" id='pwtypeman' name="pwtype" value="manual_password"/>
+                        <label for='pwtypeman'>Manual</label>
+                        <input type="radio" id='pwtyperan' name="pwtype" value="random_password"/>
+                        <label for='pwtyperan'>Random</label>
+                    </div>
+                    <div id='manual_password' class='password_type'>
+                        <label for="password">Password:</label>
+                        <input type="password" name="password" value=""/>
+                    </div>
+                    <div id='random_password' class='password_type'>
+                        <div>Password: <span id='password'></span></div>
+                        <div>
+                            <label for="pwlength">Length:</label>
+                            <input type="text" id='pwlength' name="pwlength" value="10"/>
+                        </div>
+                        <div>Character set:</div>
+                        <div>
+                            <input type='checkbox' id='pwcharup' name='pwchar' value='upper' checked/>
+                            <label for='pwcharup'>Upper case letters</label>
+                            <input type='checkbox' id='pwcharlow' name='pwchar' value='lower' checked/>
+                            <label for='pwcharlow'>Lower case letters</label>
+                            <input type='checkbox' id='pwchardig' name='pwchar' value='digit' checked/>
+                            <label for='pwchardig'>Digits</label>
+                        </div>
+                        <div id='pwpunc'></div>
+                        <div>At least one of:</div>
+                        <div>
+                            <input type='checkbox' id='pwrequp' name='pwreq' value='upper' checked/>
+                            <label for='pwrequp'>Upper case letters</label>
+                            <input type='checkbox' id='pwreqlow' name='pwreq' value='lower' checked/>
+                            <label for='pwreqlow'>Lower case letters</label>
+                            <input type='checkbox' id='pwreqdig' name='pwreq' value='digit' checked/>
+                            <label for='pwreqdig'>Digits</label>
+                            <input type='checkbox' id='pwreqpunc' name='pwreq' value='punc' checked/>
+                            <label for='pwreqpunc'>Punctuation</label>
+                        </div>
+                        <div><input type="button" name="generate" id="generate" value="Generate"/></div>
+                    </div>
+                    <div><input type="submit" name="add" value="Add password"/></div>
                 </form>
             </div>
             <div id='unlock_button' class='clear'>Manual unlock</div>
