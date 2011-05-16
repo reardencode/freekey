@@ -705,9 +705,9 @@ $(document).ready(function() {
         $('#main').load(function() {
             $(this).unbind('load');
             $.postmsg.listen(origin, 'loaded', function() {
-                $('#init').hide();
                 $('body').css('padding',0).css('margin',0);
                 $('#main').css('width','100%').css('height','100%').fadeIn();
+                $('#init, .main, script').remove();
                 return [pass, bucket];
             });
             window.onbeforeunload = freekey_unload;
