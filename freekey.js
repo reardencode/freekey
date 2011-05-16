@@ -52,7 +52,7 @@ function freekey_error(message) {
         message = arguments[1] + ': ' + arguments[2];
     }
     if (message) {
-        $('#error').append('<div>'+message+'</div>').slideDown();
+        $('#error').append($('<div></div>').text(message)).slideDown();
     } else {
         $('#error').slideUp(400, function(){$(this).empty();});
     }
@@ -76,7 +76,7 @@ function freekey_start(data) {
     freekey_status("Loading...");
     $('#unlock_button').click(function() {
         if (confirm("You sure you want to force unlock?"))
-            freekey.bucket.delPolicy();
+            window.freekey.bucket.delPolicy();
     });
     var pass = data[0];
     var b = data[1];
@@ -273,208 +273,192 @@ FK.prototype = {
         return 'pack.' + fksjcl.hex.fromBits([version]);
     },
     init: function() {
+        var fk = this;
         console.log("init");
         freekey_status("Initializing...");
-        var fk = this;
-        this.bucket.list('pack.',
-                function(data){fk.init_list(data);}, freekey_error);
+        function init_list(data) {
+            console.log("init_list");
+            var key = $(data).find('Contents Key').last().text();
+            if (!key) {
+                fk.pack = new FKPack(fk.pass);
+                fk.pack.show_list();
+                fk.done();
+                return;
+            }
+            var version = fk._version(key);
+            function init_load(data) {
+                console.log("init_load");
+                if (data['packformat'] !== 1) {
+                    freekey_error("Found future pack format, upgrade?");
+                    return;
+                }
+                fk.pack = new FKPack(fk.pass, data, version);
+                fk.pack.show_list();
+                fk.done();
+            }
+            fk.bucket.get(key, init_load, freekey_error);
+        }
+        fk.bucket.list('pack.', init_list, freekey_error);
     },
     sync: function() {
+        var fk = this;
         console.log("sync");
-        this.sync_count++;
-        if (this.syncing || !this.pack.modified && this.sync_count % 6 !== 5) {
-            this.done(false);
+        fk.sync_count++;
+        if (fk.syncing || !fk.pack.modified && fk.sync_count % 6 !== 5) {
+            fk.done(false);
             return;
         }
-        this.syncing = true;
+        fk.syncing = true;
         freekey_status("Starting sync...");
-        if (!this.pack.modified) {
-            this.start_sync_list(false);
+        if (!fk.pack.modified) {
+            fk.sync_list(false);
             return;
         }
         /* Generate UUID for each sync to ensure we are actually acquiring */
-        this.uuid = fksjcl.base64.fromBits(fksjcl.random.randomWords(4,0));
-        this.lock_tries = -1;
-        this.lockretry();
+        fk.uuid = fksjcl.base64.fromBits(fksjcl.random.randomWords(4,0));
+        fk.lock_tries = -1;
+        fk.lockretry();
     },
     lockretry: function(data) {
-        console.log("lockretry");
-        this.lock_tries++;
-        if (this.lock_tries > 15) {
+        var fk = this;
+        console.log("locking");
+        fk.lock_tries++;
+        if (fk.lock_tries > 15) {
             freekey_error('Retries exceeded, manual unlock needed?');
             return;
-        } else if (this.lock_tries > 0) {
-            freekey_status("Retrying lock: " + this.lock_tries);
+        } else if (fk.lock_tries > 0) {
+            freekey_status("Retrying lock: " + fk.lock_tries);
         }
-        var fk = this;
-        setTimeout(function() {
-            fk.bucket.put('lock', fk.uuid,
-                    function(data){fk.lockdown(data);},
-                    function(data){
-                        if (data.status === 403) {
-                            fk.lockget(data);
-                        } else {
-                            fk.lockretry(data);
-                        }
-                    });
-        }, this.lock_tries?2000:0);
-    },
-    lockdown: function(data) {
-        console.log("lockdown");
-        var fk = this;
-        this.bucket.setPolicy(this.bucket.make_policy(['pack.*','lock']),
-                function(data){fk.lockget(data);}, freekey_error);
-    },
-    lockget: function(data) {
-        console.log("lockget");
-        var fk = this;
-        this.bucket.get('lock',
-                function(data){fk.locked(data);}, freekey_error);
-    },
-    locked: function(data) {
-        console.log('Mine', this.uuid, 'got', data);
-        if (data !== this.uuid) {
-            this.lockretry(data);
-            return;
+        function lockverify(data) {
+            console.log('Mine', fk.uuid, 'got', data);
+            if (data !== fk.uuid) { fk.lockretry(data); return; }
+            freekey_status("Listing packs...");
+            fk.sync_list(true);
         }
-        freekey_status("Listing packs...");
-        this.start_sync_list(true);
-    },
-    start_sync_list: function(locked) {
-        var fk = this;
-        this.bucket.list('pack.',
-                function(data){fk.sync_list(data, locked);}, freekey_error);
-    },
-    sync_list: function(data, locked) {
-        console.log("sync_list");
-        var list = $(data);
-        this.lastlist = list;
-        var lastkey = list.find('Contents Key').last().text();
-        var version = lastkey==''?-1:this._version(lastkey);
-        if (this.pack.ver >= version) {
-            if (!locked) {
-                this.done();
-            } else if (this.pack.modified) {
-                this.start_savepack();
+        function lockget(data) {
+            console.log("getting lock to verify");
+            fk.bucket.get('lock', lockverify, freekey_error);
+        }
+        function lockdown(data) {
+            console.log("setting policy");
+            fk.bucket.setPolicy(fk.bucket.make_policy(['pack.*','lock']),
+                    lockget, freekey_error);
+        }
+        function lockerr(data) {
+            if (data.status === 403) {
+                lockget(data);
             } else {
-                this.unlock();
+                fk.lockretry(data);
             }
-            return;
         }
-        freekey_status("Merging newer pack...");
+        setTimeout(function() {
+            fk.bucket.put('lock', fk.uuid, lockdown, lockerr);
+        }, fk.lock_tries?2000:0);
+    },
+    sync_list: function(locked) {
         var fk = this;
-        this.bucket.get(lastkey,
-                function(data){fk.merge(version, data, locked);},
-                freekey_error);
-    },
-    merge: function(version, pack, locked) {
-        console.log("merge");
-        if (pack['packformat'] !== 1) {
-            freekey_error("Newer FreeKey used on repo, upgrade first.");
-            return;
+        function process_list(data) {
+            console.log("process sync list");
+            var list = $(data);
+            fk.lastlist = list;
+            var lastkey = list.find('Contents Key').last().text();
+            var version = lastkey==''?-1:fk._version(lastkey);
+            if (fk.pack.ver >= version) {
+                if (!locked) {
+                    fk.done();
+                } else if (fk.pack.ver > version || fk.pack.modified) {
+                    fk.savepack();
+                } else {
+                    fk.unlock();
+                }
+                return;
+            }
+            freekey_status("Merging newer pack...");
+            function merge(data) {
+                console.log("merge");
+                if (data['packformat'] !== 1) {
+                    freekey_error("Found future pack format, upgrade?");
+                    return;
+                }
+                pack = new FKPack(fk.pass, data, version);
+                if (!fk.pack.modified) {
+                    fk.pack = pack;
+                    fk.pack.show_list();
+                    fk.unlock();
+                    return;
+                }
+                if (!locked) fk.done();
+                fk.pack.merge(pack);
+                fk.savepack();
+            }
+            fk.bucket.get(lastkey, merge, freekey_error);
         }
-        pack = new FKPack(this.pass, pack, version);
-        if (!this.pack.modified) {
-            this.pack = pack;
-            this.pack.show_list();
-            this.unlock();
-            return;
-        }
-        if (!locked) this.done();
-        this.pack.merge(pack);
-        this.start_savepack();
+        fk.bucket.list('pack.', process_list, freekey_error);
     },
-    start_savepack: function() {
-        console.log("start_savepack");
+    savepack: function() {
+        var fk = this;
+        console.log("savepack");
         var names = ['lock'];
-        this.pack_tries = -1;
-        if (this.lastlist) {
-            this.lastlist.find('Contents Key').each(
+        fk.pack_tries = -1;
+        if (fk.lastlist) {
+            fk.lastlist.find('Contents Key').each(
                     function() {names.push($(this).text());});
         }
-        var fk = this;
-        freekey_status("Saving pack...");
-        this.bucket.setPolicy(this.bucket.make_policy(names),
-                function(data){fk.savepack();}, freekey_error);
-    },
-    savepack: function(data) {
-        console.log("savepack");
-        this.pack_tries++;
-        if (this.pack_tries > 2) {
-            freekey_error('Retries exceeded, will try again shortly');
-            freekey_status();
-            this.done(false);
-            return;
-        } else if (this.pack_tries > 0) {
-            freekey_status("Retrying save: " + this.pack_tries);
+        function savedone(data) {
+            fk.pack.ver++;
+            fk.pack.set_modified(false);
+            fk.unlock(data);
         }
-        var out = this.pack.string_crypt();
-        var fk = this;
-        this.bucket.putJson(this._key(this.pack.ver+1), out,
-                function(data){
-                    fk.pack.ver++;
-                    fk.pack.set_modified(false);
-                    fk.unlock(data);
-                },
-                function(data){fk.savepack(data);}, false);
+        function saveretry(data) {
+            console.log("saveretry");
+            fk.pack_tries++;
+            if (fk.pack_tries > 2) {
+                freekey_error('Retries exceeded, will try again shortly');
+                freekey_status();
+                fk.done(false);
+                return;
+            } else if (fk.pack_tries > 0) {
+                freekey_status("Retrying save: " + fk.pack_tries);
+            }
+            var out = fk.pack.string_crypt();
+            fk.bucket.putJson(fk._key(fk.pack.ver+1), out,
+                    savedone, saveretry, false);
+        }
+        freekey_status("Saving pack...");
+        fk.bucket.setPolicy(fk.bucket.make_policy(names),
+                saveretry, freekey_error);
     },
     unlock: function(data) {
-        console.log("unlock");
         var fk = this;
-        this.bucket.delPolicy(function(data){fk.cleanup();}, freekey_error);
-    },
-    cleanup: function() {
-        console.log("cleanup");
-        if (this.lastlist) {
-            var list = this.lastlist.find('Contents');
-            delete this.lastlist;
-            if (list.length > 100) {
-                var fk = this;
-                var threshold = new Date();
-                threshold.setMonth(threshold.getMonth()-1);
-                list.slice(0, list.length-100).each(function() {
-                    var entry = $(this);
-                    var key = entry.find('Key').text();
-                    var lmt = new Date(entry.find('LastModified').text());
-                    if (lmt < threshold) fk.bucket.del(key);
-                });
+        console.log("unlock");
+        function cleanup(data) {
+            console.log("cleanup");
+            if (fk.lastlist) {
+                var list = fk.lastlist.find('Contents');
+                delete fk.lastlist;
+                if (list.length > 100) {
+                    var threshold = new Date();
+                    threshold.setMonth(threshold.getMonth()-1);
+                    list.slice(0, list.length-100).each(function() {
+                        var entry = $(this);
+                        var key = entry.find('Key').text();
+                        var lmt = new Date(entry.find('LastModified').text());
+                        if (lmt < threshold) fk.bucket.del(key);
+                    });
+                }
             }
+            fk.done();
         }
-        this.done();
+        fk.bucket.delPolicy(cleanup, freekey_error);
     },
     done: function(show) {
+        var fk = this;
         console.log("done");
-        this.syncing = false;
+        fk.syncing = false;
         if (show === undefined || show) freekey_status_done("Done...");
         $('#password_entry').fadeIn();
-        if (this.sync_timer) clearTimeout(this.sync_timer);
-        var fk = this;
-        this.sync_timer = setTimeout(function(){fk.sync();}, 5000);
-    },
-    init_list: function(data) {
-        console.log("init_list");
-        var key = $(data).find('Contents Key').last().text();
-        if (key) {
-            var version = this._version(key);
-            var fk = this;
-            this.bucket.get(key,
-                    function(data){fk.init_load(version, data);},
-                    freekey_error);
-            return;
-        }
-        this.pack = new FKPack(this.pass);
-        this.pack.show_list();
-        this.done();
-    },
-    init_load: function(version, data) {
-        console.log("init_load");
-        if (data['packformat'] !== 1) {
-            freekey_error("Newer FreeKey used on repo, upgrade first.");
-            return;
-        }
-        this.pack = new FKPack(this.pass, data, version);
-        this.pack.show_list();
-        this.done();
+        if (fk.sync_timer) clearTimeout(fk.sync_timer);
+        fk.sync_timer = setTimeout(function(){fk.sync();}, 5000);
     }
 };
 
