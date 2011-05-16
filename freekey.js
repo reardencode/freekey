@@ -150,6 +150,13 @@ function freekey_start(data) {
         var c = chars.punctuation[i];
         $('<span class="rt checked"></span>').text(c).appendTo(puncdiv);
     }
+    $('<span>All</span>').appendTo(puncdiv).click(function() {
+        $('#pwpunc span.rt').addClass('checked').removeClass('unchecked');
+    });
+    puncdiv.append(' | ');
+    $('<span>None</span>').appendTo(puncdiv).click(function() {
+        $('#pwpunc span.rt').addClass('unchecked').removeClass('checked');
+    });
     $('#random_password').find('span.rt').click(function() {
         var tl = $(this);
         if (tl.hasClass('checked')) {
