@@ -148,13 +148,13 @@ function freekey_start(data) {
     var puncdiv = $('#pwpunc').empty();
     for (var i=0; i<chars.punctuation.length; i++) {
         var c = chars.punctuation[i];
-        $('<span class="rt checked"></span>').text(c).appendTo(puncdiv);
+        $('<span class="rt checked"></span>\n').text(c).appendTo(puncdiv);
+        puncdiv.append('\n');
     }
-    $('<span>All</span>').appendTo(puncdiv).click(function() {
+    $('<span class="xt">All</span>').appendTo(puncdiv).click(function() {
         $('#pwpunc span.rt').addClass('checked').removeClass('unchecked');
     });
-    puncdiv.append(' | ');
-    $('<span>None</span>').appendTo(puncdiv).click(function() {
+    $('<span class="xt">None</span>').appendTo(puncdiv).click(function() {
         $('#pwpunc span.rt').addClass('unchecked').removeClass('checked');
     });
     $('#random_password').find('span.rt').click(function() {
