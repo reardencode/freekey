@@ -11,6 +11,10 @@ FreeKey is an easy way to manage all of your passwords.
 
 To build FreeKey from a git checkout, you just need Java (to run [Closure](http://code.google.com/closure/)).  Just check it out and run ./build.sh .  The resulting index.html is a complete FreeKey, open it in your browser and have fun.
 
+To use FreeKey, you need an Amazon S3 account and a bucket for it.  When you open FreeKey for the first time in any browser, you will be asked for your Amazon AWS credentials and S3 bucket.  This information is never sent to anyone, but is instead stored AES encrypted with your password in your browser's localStorage system.
+
+I've recently adjusted the timeouts on FreeKey's sync behavior so that (unless the manual sync button is pressed) it may take up to 5 minutes for updates on one system to propogate to another.  This change was designed to bring two continuously running FreeKey clients under the usage level designated as "Free Tier" for Amazon S3 pricing.
+
 Status
 ------
 

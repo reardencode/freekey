@@ -130,12 +130,16 @@ function freekey_start(data) {
             return;
         }
 
-        $('#identifier, #username, #manpass, #password').val('');
+        $('#identifier, #username, #manpass').val('');
+        $('#password').text('');
         window.freekey.pack.add(identifier, username, password);
     });
     $('#unlock_button').click(function() {
         if (confirm("You sure you want to force unlock?"))
             window.freekey.bucket.delPolicy();
+    });
+    $('#sync_button').click(function() {
+        window.freekey.sync();
     });
     $('#password_type input').click(function() {
         $('div.password_type').hide();
@@ -175,7 +179,7 @@ function freekey_start(data) {
         if ($('#pwreqlow').hasClass('checked')) req.lower = chars.lower;
         if ($('#pwreqdig').hasClass('checked')) req.digits = chars.digits;
         if ($('#pwreqpunc').hasClass('checked')) req.punctuation = punc;
-        if (pwtimer) clearTimer(pwtimer);
+        if (pwtimer) clearTimeout(pwtimer);
         $('#password').text(freekey_generate(length, charset, req));
         pwtimer = setTimeout(function() { $('#password').empty(); }, 30000);
     });
@@ -343,6 +347,7 @@ FKPack.prototype = {
         this.modified = value;
         if (value) {
             $('.modified').fadeIn();
+            window.freekey.set_sync(5);
         } else {
             $('.modified').fadeOut();
         }
@@ -395,11 +400,10 @@ FK.prototype = {
         }
         fk.bucket.list('pack.', init_list, freekey_error);
     },
-    sync: function() {
+    sync: function(f) {
         var fk = this;
         console.log("sync");
-        fk.sync_count++;
-        if (fk.syncing || !fk.pack.modified && fk.sync_count % 6 !== 5) {
+        if (fk.syncing) {
             fk.done(false);
             return;
         }
@@ -552,8 +556,15 @@ FK.prototype = {
         fk.syncing = false;
         if (show === undefined || show) freekey_status_done("Done...");
         $('#password_entry').fadeIn();
+        if (!fk.sync_timer) fk.set_sync(300);
+    },
+    set_sync: function(seconds) {
+        var fk = this;
         if (fk.sync_timer) clearTimeout(fk.sync_timer);
-        fk.sync_timer = setTimeout(function(){fk.sync();}, 5000);
+        fk.sync_timer = setTimeout(function(){
+            delete fk.sync_timer;
+            fk.sync();
+        }, seconds * 1000);
     }
 };
 

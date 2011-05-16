@@ -21,11 +21,6 @@
             #password_list > div { padding: 5px; }
             #password_list > div:nth-child(even) { background-color: #bfffbf; }
             #password_list > div:nth-child(odd) { background-color: #b0dfff; }
-            #unlock_button {
-                background-color: #bbbbbb;
-                cursor: pointer;
-                padding: 5px;
-            }
             span.key { display: none; }
             .identifier { cursor: pointer; }
             .modified { color: #a02020; display: none; }
@@ -144,7 +139,10 @@
                     <div><input type="submit" name="add" value="Add password"/></div>
                 </form>
             </div>
-            <div id='unlock_button' class='clear'>Manual unlock</div>
+            <div class='clear'>
+                <input type='button' id='unlock_button' value='Manual unlock'/>
+                <input type='button' id='sync_button' value='Manual sync'/>
+            </div>
         </div>
     </body>
 </html>
