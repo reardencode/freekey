@@ -806,6 +806,7 @@ $(document).ready(function() {
                 'aws_secret': document['conf_form']['aws_secret'].value
             };
             var salt = fksjcl.random.randomWords(2,0);
+            var ciph = freekey_ciph(pass, salt);
             var erc = freekey_encrypt(ciph, salt, rc, 'value');
             localStorage.setItem('freekey-rc', JSON.stringify(erc));
             iframe(pass, rc);
