@@ -773,7 +773,7 @@ $(document).ready(function() {
                 return [pass, bucket];
             });
             window.onbeforeunload = freekey_unload;
-            this.contentWindow.location = bucket.uri(key, 5);
+            this.src = bucket.uri(key, 5);
         });
         var html = '<html>' + $('html').html() + '</html>';
         var expires = new Date();
