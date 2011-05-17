@@ -27,6 +27,22 @@ var fksjcl = {
     aes: sjcl.cipher.aes,
     random: sjcl.random
 }
+function freekey_cookie(name, value, expires) {
+    var e = encodeURIComponent;
+    if (value !== undefined) {
+        if (value === null) expires = -1;
+        if(typeof expires === "number") {
+            var d = expires;
+            expires = new Date();
+            expires.setDate(expires.getDate()+d);
+        }
+        expires = expires?"; expires="+expires.toUTCString():"";
+        return document.cookie = e(name) + "=" + e(value) + expires;
+    }
+    var re = new RegExp("(?:^|; )"+e(name)+"=([^;]*)");
+    var result = re.exec(document.cookie);
+    return result?decodeURIComponent(result[1]):null;
+}
 function freekey_generate(length, charset, req) {
     var out = '';
     var tmp = 0;
@@ -729,6 +745,11 @@ S3Bucket.prototype = {
 };
 
 $(document).ready(function() {
+    var useCookie = false;
+    if ($.browser['mozilla'] ||
+        $.browser['webkit'] && $.browser['version'] == 532.2) {
+        useCookie = true;
+    }
     function show_init(id, error) {
         $('.init').slideUp();
         if (error) {
@@ -780,7 +801,14 @@ $(document).ready(function() {
     function auth() {
         try {
             show_init('loading');
-            var erc = JSON.parse(localStorage.getItem('freekey-rc'));
+            var erc;
+            if (useCookie) {
+                erc = freekey_cookie('freekey-rc');
+                freekey_cookie('freekey-rc', erc, 360); /* refresh */
+            } else {
+                erc = localStorage.getItem('freekey-rc')
+            }
+            erc = JSON.parse(erc);
             var pass = document['auth_form']['authpass'].value;
             var rc = freekey_decrypt(pass, erc, 'value');
             iframe(pass, rc);
@@ -808,7 +836,12 @@ $(document).ready(function() {
             var salt = fksjcl.random.randomWords(2,0);
             var ciph = freekey_ciph(pass, salt);
             var erc = freekey_encrypt(ciph, salt, rc, 'value');
-            localStorage.setItem('freekey-rc', JSON.stringify(erc));
+            erc = JSON.stringify(erc);
+            if (useCookie) {
+                freekey_cookie('freekey-rc', erc, 360);
+            } else {
+                localStorage.setItem('freekey-rc', erc);
+            }
             iframe(pass, rc);
         } catch (ex) {
             show_init('conf', ex.toString());
@@ -828,7 +861,12 @@ $(document).ready(function() {
             conf();
             return false;
         });
-        var json = localStorage.getItem('freekey-rc');
+        var json
+        if (useCookie) {
+            json = freekey_cookie('freekey-rc');
+        } else {
+            json = localStorage.getItem('freekey-rc')
+        }
         if (json) {
             JSON.parse(json);
             show_init('auth');
