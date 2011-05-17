@@ -168,7 +168,7 @@ function freekey_start(data) {
         }
     });
     $('#pwlength').keydown(function(e) {
-        // Allow backspace, delete and numbers
+        /* Allow backspace, delete and numbers */
         if (e.keyCode != 46 && e.keyCode != 8 &&
             (e.keyCode < 48 || e.keyCode > 57 ))
             e.preventDefault(); 
@@ -207,17 +207,27 @@ function FKPack(pass, pack, version) {
     } else {
         this.ver = version;
     }
+    this.modified = false;
+    this.packformat = 2;
     if (pack === undefined) {
-        this.packformat = 1;
         this.salt = fksjcl.random.randomWords(2, 0);
         this.ciph = freekey_ciph(pass, salt);
         this.pwdb = {};
     } else {
-        this.packformat = pack['packformat'];
+        var contents = freekey_decrypt(pass, pack, 'contents', this);
+        if (pack['packformat'] === 1) {
+            this.pwdb = {};
+            for (var k in contents) {
+                var iu = JSON.parse(k);
+                this.pwdb[iu[0]] = this.pwdb[iu[0]] || {};
+                this.pwdb[iu[0]][iu[1]] = contents[k];
+            }
+            this.set_modified(true);
+        } else if (pack['packformat'] === 2) {
+            this.pwdb = contents;
+        }
         delete pack['packformat'];
-        this.pwdb = freekey_decrypt(pass, pack, 'contents', this);
     }
-    this.modified = false;
 }
 
 FKPack.prototype = {
@@ -227,35 +237,33 @@ FKPack.prototype = {
         out['packformat'] = this.packformat;
         return out;
     },
-    _make_entry: function(k) {
+    _make_entry: function(identifier, username) {
         var fkp = this;
         var outer = $('<div></div>');
         var del = '<span class="del">delete</span>';
         var key = '<span class="key"></span>';
 
-        var kd = JSON.parse(k);
-        kd = kd[1] + '@' + kd[0];
-        var id_div = $('<div class="identifier"></div>');
-        id_div.appendTo(outer).text(kd);
-        var id_key = $(key).appendTo(id_div).text(k);
+        var kd = username + '@' + identifier;
+        var id_div = $('<div class="identifier"></div>').text(kd);
+        id_div.appendTo(outer);
         var id_del = $(del).appendTo(id_div).click(function() {
-            fkp.del(k);
+            fkp.del(identifier, username);
             outer.slideUp(400, function() {$(this).remove();});
         });
 
         var pw_div = $('<div class="password"></div>').appendTo(outer);
         id_div.click(function() {
             pw_div.empty();
-            var pwc = $('<div class="password_close">close</div>');
+            var pwc = $('<div class="close">close</div>');
             pwc.appendTo(pw_div).click(function() {
                 pw_div.slideUp(400, function() {$(this).empty();});
             });
-            var pws = fkp._get(k);
+            var pws = fkp.get(identifier, username);
             for (var i=0; i<pws.length; i++) {
                 var d = $('<div></div>').appendTo(pw_div).text(pws[i]);
                 var pw_key = $(key).appendTo(d).text(i);
                 var pw_del = $(del).appendTo(d).click(function() {
-                    fkp.del(k, i);
+                    fkp.del(identifier, username, i);
                     d.remove();
                     if (pw_div.find('div').length == 1) id_del.click();
                 });
@@ -265,26 +273,38 @@ FKPack.prototype = {
         });
         return outer;
     },
+    _sorted_keys: function(obj) {
+        var keys = [];
+        for (var k in obj) keys.push(k);
+        keys.sort();
+        return keys;
+    },
     show_list: function() {
         var pl = $('#password_list').empty();
-        var keys = [];
-        for (var k in this.pwdb) { keys.push(k); }
-        keys.sort();
-        for (var i=0; i<keys.length; i++) {
-            pl.append(this._make_entry(keys[i]));
+        var ids = this._sorted_keys(this.pwdb);
+        for (var i=0; i<ids.length; i++) {
+            var uns = this._sorted_keys(this.pwdb[ids[i]]);
+            for (var j=0; j<uns.length; j++) {
+                pl.append(this._make_entry(ids[i], uns[j]));
+            }
         }
     },
-    del: function(k, i) {
-        if (!(k in this.pwdb)) return;
-        if (i === undefined) {
-            delete this.pwdb[k];
+    del: function(identifier, username, i) {
+        if (username === undefined) {
+            delete this.pwdb[identifier];
+        } else if (i === undefined) {
+            delete this.pwdb[identifier][username];
+            if ($.isEmptyObject(this.pwdb[identifier]))
+                this.del(identifier);
         } else {
-            this.pwdb[k].splice(i, 1);
+            this.pwdb[identifier][username].splice(i, 1);
+            if (this.pwdb[identifier][username].length == 0)
+                this.del(identifier, username);
         }
         this.set_modified(true);
     },
-    _get: function(k) {
-        var pl = this.pwdb[k] || [];
+    get: function(identifier, username) {
+        var pl = (this.pwdb[identifier] || {})[username] || [];
         var ret = [];
         for (var i=0; i<pl.length; i++) {
             var v = fksjcl.base64.toBits(pl[i]);
@@ -294,58 +314,61 @@ FKPack.prototype = {
         }
         return ret;
     },
-    get: function(identifier, username) {
-        return this._get(JSON.stringify([identifier, username]));
-    },
     _pw_encrypt: function(password, iv) {
         var ct = iv.concat(fksjcl.ccm.encrypt(this.ciph, password, iv));
         return fksjcl.base64.fromBits(ct);
     },
-    _add: function(k) {
-        var n = this._make_entry(k).hide();
-        var added = false
+    _add: function(identifier, username) {
+        var n = this._make_entry(identifier, username).hide();
+        var added = false;
         $('#password_list > div').each(function() {
-            var e = $(this);
-            if (e.find('.key').text() > k) {
-                e.before(n);
+            var i = $(this).find('span.identifier').text().split('@');
+            if (i[1] > identifier || i[1] == identifier && i[0] > username) {
+                n.insertBefore(this);
                 added = true;
-                return false;
+                return false; /* break */
             }
         });
         if (!added) $('#password_list').append(n);
         n.slideDown();
     },
+    _close: function(identifier, username) {
+        var k = username+'@'+identifier;
+        $('div.identifier:contains('+k+')').parent().find('.close').click();
+    },
     add: function(identifier, username, password) {
-        var pl, k = JSON.stringify([identifier, username]);
+        var pl;
         password = fksjcl.utf8String.toBits(password);
-        if (k in this.pwdb) {
-            pl = this.pwdb[k];
+        var uo = this.pwdb[identifier] = this.pwdb[identifier] || {};
+        if (username in uo) {
+            pl = uo[username];
             for (var i=0; i<pl.length; i++) {
                 var v = fksjcl.base64.toBits(pl[i]);
                 if (this._pw_encrypt(password, v.slice(0,4)) == pl[i]) return;
             }
-            $('div.identifier:contains('+k+')').parent().
-                    find('.password_close').click();
+            this._close(identifier, username);
         } else {
-            pl = this.pwdb[k] = [];
-            this._add(k);
+            pl = uo[username] = [];
+            this._add(identifier, username);
         }
         pl.push(this._pw_encrypt(password, fksjcl.random.randomWords(4,0)));
         this.set_modified(true);
     },
     merge: function(pack) {
-        for (var k in pack.pwdb) {
-            if (k in this.pwdb) {
-                for (var i=0; i<pack.pwdb[k].length; i++) {
-                    var v = pack.pwdb[k][i];
-                    if ($.inArray(v, this.pwdb[k])) continue;
-                    this.pwdb[k].push(v);
-                    $('div.identifier:contains('+k+')').parent().
-                            find('.password_close').click();
+        for (var identifier in pack.pwdb) {
+            var uo = this.pwdb[identifier] = this.pwdb[identifier] || {};
+            for (var username in pack.pwdb[identifier]) {
+                var npl = pack.pwdb[identifier][username];
+                if (username in uo) {
+                    for (var i=0; i<npl.length; i++) {
+                        if ($.inArray(npl[i], uo[username])) continue;
+                        uo[username].push(npl[i]);
+                        this._close(identifier, username);
+                    }
+                } else {
+                    uo[username] = npl;
+                    this._add(identifier, username);
                 }
-            } else {
-                this.pwdb[k] = pack.pwdb[k];
-                this._add(k);
             }
         }
         this.ver = pack.ver;
@@ -395,7 +418,7 @@ FK.prototype = {
             var version = fk._version(key);
             function init_load(data) {
                 console.log("init_load");
-                if (data['packformat'] !== 1) {
+                if (data['packformat'] > 2) {
                     freekey_error("Found future pack format, upgrade?");
                     return;
                 }
@@ -482,7 +505,7 @@ FK.prototype = {
             freekey_status("Merging newer pack...");
             function merge(data) {
                 console.log("merge");
-                if (data['packformat'] !== 1) {
+                if (data['packformat'] > 2) {
                     freekey_error("Found future pack format, upgrade?");
                     return;
                 }
