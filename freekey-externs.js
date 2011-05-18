@@ -209,7 +209,8 @@ var jQuery = {
         "height": function () {},
         "innerWidth": function () {},
         "outerWidth": function () {},
-        "width": function () {}
+        "width": function () {},
+        "zeroclip": function() {}
     },
     "extend": function () {},
     "noConflict": function () {},

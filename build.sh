@@ -2,7 +2,8 @@
 cat head.tmpl > index.html
 
 echo "<script type='text/javascript'>" >> index.html
-cat jquery/jquery-1.6.min.js >> index.html
+#cat jquery/jquery-1.6.min.js >> index.html
+java -jar closure/compiler.jar --js jquery/jquery-1.6.js >> index.html
 echo "</script>" >> index.html
 
 echo "<script type='text/javascript'>" >> index.html
@@ -12,6 +13,11 @@ echo "</script>" >> index.html
 echo "<script type='text/javascript'>" >> index.html
 echo '"use strict";' >> index.html
 java -jar closure/compiler.jar --js jquery.postmsg.js >> index.html
+echo "</script>" >> index.html
+
+echo "<script type='text/javascript'>" >> index.html
+echo '"use strict";' >> index.html
+java -jar closure/compiler.jar --js jquery.zeroclip.js >> index.html
 echo "</script>" >> index.html
 
 echo "<script type='text/javascript'>" >> index.html

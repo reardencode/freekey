@@ -4,7 +4,7 @@
             div.init_button { width: 20em; text-align: center; clear: both; }
             div.init_label { width: 8em; clear: left; float: left; }
             div.init_input { width: 12em; clear: right; float: left; }
-            #main { border: none; margin: 0; padding: 0; height: 0; width: 0; }
+            iframe.postable { border: none; margin: 0; padding: 0; height: 0; width: 0; }
             #init_error { color: #a02020; }
             #status_holder { width: 100%; height: 2em; }
             #status, #error {
@@ -86,12 +86,11 @@
                     <input type='hidden' name='policy'/>
                     <input type='hidden' name='signature'/>
                     <input type='hidden' name='redirect'/>
-                    <input type='hidden' name='Content-Type' value='text/html'/>
+                    <input type='hidden' name='Content-Type'/>
                     <input type='textarea' name='file'/>
                 </form>
             </div>
         </div>
-        <iframe name='main' id='main'>FreeKey requires iFrames.</iframe>
         <div class='main'>
             <div id='error'></div>
             <div id='status_holder'><div id='status'></div></div>

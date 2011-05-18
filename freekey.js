@@ -1,3 +1,28 @@
+var ZERO_CLIPBOARD="\
+Q1dTCYgGAAB4nH1V61LbRhTeXV2OJNsYczFgIEC4JCGABSRpSy+B2JDQQtWJocl0\
+BqK1tUZqhOSRZAj/8ih9hz5AXsGZTl+ndHUhxU2nO56z3/l05uye7+wc6xr6DeUx\
+qpcUhFCNXF9ffxjNcYhRo8U8NruO0IeRLTkm+BpEa4i8/+t3GRGUrRf5tktDe41d\
+MC8Kpd14Q/DM911GPfHCd6zCLyzwa67Tafo0sAppuOWEHZdeyY1O4ERMbnajyPcK\
+IYteUM+qdYPQD/It12m9jX2XBcSx5EYUON6ZwunOEXsXAY+O94HsAu8iFnjULe1m\
+YN/je5u2WLnvAsnRNGrZ6rnfDZlxwQKxRV1XSd1ulPJ1/9KDBB13pDCiZ2ygEdsG\
+j2WHvsXU3dc7taM3e/tHanjDZVqEV2HEzpUGa3V5dVd4Ocfz+5d1/5w6nnbgU4sF\
++17bFwPfjzT3k691aEDPGb92KBvNX1krmrOjqLNVrVLLb7K1ln9e3WlsVjd0/Um1\
+2XXcyPFy6ZHdyHHDkT5tt1JtF/rJerqn6Wu+F/ErsWCmPyiRjrYi54KlgZP/k2Tq\
+9gPYSh5APZOYBVra2VicAtfyn+4qZwHt2E4rVJvszPH2HNcVD2lkS5eOxW3b9f1A\
+tplzZkeKFdDLl/wkibodmyrUsmq241raYdye5ECpdrBf+2GQf0ncA4c3gJelHRrH\
+jd03xs+7L9UMHh9lZN149aOSwuOfcnFO3qQmbb0V44aoSVEXlHeikXQzz1/bpzek\
+8E50XN6o4r/KLfQpU/pMx/J/yz9cxmWhDOOyhMqD5SkJjQnKYnmpIlfuVe5XHlSW\
+Kw8rC6QoEayoWk7MFwaKg6Whx4AJEBGIBEQGQQFJBaKBlAMpD6QA0gCQIsglICNA\
+xkGYAFIBMgkwDWQGhFkgc0DuApkHsqDmMZAVIKtA1oBUgejqOmc21E1uHwF5DOQJ\
+4C+AfAnkKyBbQL4G8g2Qb4F8B+o2wA6QZ4DrIOyCsAfCcw0lUwR/ZvgiOP3IhwgW\
+cDZIsCipIpJkPmskBBiBgpGiIqQJOJdYPqbiOaRiUcRIQ5hrIfT055ySiKYVzMLK\
+kKmuDM8aAyInyW1yNCOF22Q5I8Xb5FhGSjLR8n/gnv5q+U+9t4/MojnYLtEhc3jl\
+jjGCGT4Z7bXL7bG9Udwefz9xjk9Vhl3crtjqqXwifS8hWzblJToZmylTbk+vYuMO\
+jsECWjZnkuDZvTmcwbscGvOiKVcxXThZNGVjkQebS+17pmLcJwl8sI1v4PI2uYEP\
+t4UbuLItxrCwoplgrMagaOZTENf2NK0NryE8gWRCVE3p6ae5j3aOFwyZb8of6RT3\
+FYn7Y9yvmjlDx1mKGncSfVTC9Z/v6QyZE7q5rpsburmpm490U+K/12g6WXYc+nR4\
+CKX/H31zGG1z5m9Pt5ok";
+    
 /* This helps compression without combining compilation with sjcl */
 var chars = {
     punctuation: '`~!@#$%^&*()-_=+[]{}\\|;:\'",<.>/?',
@@ -420,7 +445,6 @@ FK.prototype = {
     },
     init: function() {
         var fk = this;
-        console.log("init");
         freekey_status("Initializing...");
         function init_list(data) {
             console.log("init_list");
@@ -444,7 +468,12 @@ FK.prototype = {
             }
             fk.bucket.get(key, init_load, freekey_error);
         }
-        fk.bucket.list('pack.', init_list, freekey_error);
+        function init(data) {
+            console.log("init");
+            fk.bucket.list('pack.', init_list, freekey_error);
+        }
+        fk.bucket.putBytes(
+                'ZeroClipboard.swf', ZERO_CLIPBOARD, init, freekey_error);
     },
     sync: function(f) {
         var fk = this;
@@ -497,7 +526,7 @@ FK.prototype = {
             }
         }
         setTimeout(function() {
-            fk.bucket.put('lock', fk.uuid, lockdown, lockerr);
+            fk.bucket.putString('lock', fk.uuid, lockdown, lockerr);
         }, fk.lock_tries?2000:0);
     },
     sync_list: function(locked) {
@@ -699,9 +728,39 @@ S3Bucket.prototype = {
             'error': error
         });
     },
-    put: function(key, data, success, error, ct, async) {
-        ct = ct || 'application/octet-stream';
-        var md5 = fksjcl.base64.fromBits(sjcl.hash.md5.hash(data));
+    post: function(key, data, contentType, success) {
+        console.log('post', key, contentType, success);
+        var origin = this.origin();
+        var expires = new Date();
+        expires.setTime(expires.getTime() + 5000);
+        var policy = {
+            "expiration": expires,
+            "conditions": [
+                {'bucket': this.bucket },
+                {'key': key},
+                {'Content-Type': contentType},
+                {'redirect': origin}
+            ]
+        };
+        policy = fksjcl.base64.fromBits(
+                fksjcl.utf8String.toBits(JSON.stringify(policy)));
+        document['awsform']['key'].value = key;
+        document['awsform']['policy'].value = policy;
+        document['awsform']['file'].value = data;
+        document['awsform']['AWSAccessKeyId'].value = this.access_key;
+        document['awsform']['signature'].value = this.sign(policy);
+        document['awsform']['redirect'].value = origin;
+        document['awsform']['Content-Type'].value = contentType;
+        var tid = new Date().getTime();
+        var target = $('<iframe></iframe>').attr('name', tid).
+            attr('id', tid).addClass('postable').appendTo($('body')).
+            load(function(){success($(this).unbind('load'));});
+        $('#awsform').attr('target', tid).
+            attr('action',origin).attr('method','post').submit();
+        console.log('posted');
+        document['awsform']['file'].value = '';
+    },
+    _put: function(key, data, success, error, ct, md5, async, binary) {
         var verb = 'PUT';
         var headers = this.authHeaders(key, verb, md5, ct);
         headers['Content-MD5'] = md5;
@@ -713,11 +772,24 @@ S3Bucket.prototype = {
             'data': data,
             'success': success,
             'error': error,
-            'async': async===undefined?true:async
+            'async': async===undefined?true:async,
+            'binaryData': binary
         });
     },
+    putBytes: function(key, b64data, success, error, ct) {
+        var ct = ct || 'application/octet-stream';
+        var data = atob(b64data);
+        var md5 = fksjcl.base64.fromBits(
+                sjcl.hash.md5.hash(fksjcl.base64.toBits(b64data)));
+        this._put(key, data, success, error, ct, md5, false, true);
+    },
+    putString: function(key, data, success, error, ct, async) {
+        ct = ct || 'text/plain';
+        var md5 = fksjcl.base64.fromBits(sjcl.hash.md5.hash(data));
+        this._put(key, data, success, error, ct, md5, async);
+    },
     putJson: function(key, data, success, error, async) {
-        this.put(key, JSON.stringify(data),
+        this.putString(key, JSON.stringify(data),
                 success, error, 'application/json', async);
     },
     setPolicy: function(policy, success, error) {
@@ -762,41 +834,19 @@ $(document).ready(function() {
     function iframe(pass, rc) {
         var bucket = new S3Bucket(
             rc['s3_bucket'], rc['aws_access'], rc['aws_secret']);
-        var origin = bucket.origin();
         var key = 'index.html';
-        $('#main').load(function() {
-            $(this).unbind('load');
-            $.postmsg.listen(origin, 'loaded', function() {
+        function success(elem) {
+            $.postmsg.listen(bucket.origin(), 'loaded', function() {
                 $('body').css('padding',0).css('margin',0);
-                $('#main').css('width','100%').css('height','100%').fadeIn();
+                elem.css('width','100%').css('height','100%').fadeIn();
                 $('#init, .main, script').remove();
                 return [pass, bucket];
             });
             window.onbeforeunload = freekey_unload;
-            this.src = bucket.uri(key, 5);
-        });
+            elem.attr('src',bucket.uri(key, 5));
+        }
         var html = '<html>' + $('html').html() + '</html>';
-        var expires = new Date();
-        expires.setTime(expires.getTime() + 5000);
-        var policy = {
-            "expiration": expires,
-            "conditions": [
-                {'bucket': bucket.bucket },
-                {'key': key},
-                {'Content-Type': 'text/html'},
-                {'redirect': origin}
-            ]
-        };
-        policy = fksjcl.base64.fromBits(
-                fksjcl.utf8String.toBits(JSON.stringify(policy)));
-        document['awsform']['key'].value = key;
-        document['awsform']['policy'].value = policy;
-        document['awsform']['file'].value = html;
-        document['awsform']['AWSAccessKeyId'].value = bucket.access_key;
-        document['awsform']['signature'].value = bucket.sign(policy);
-        document['awsform']['redirect'].value = origin;
-        $('#awsform').attr('action',origin).attr('method','post').submit();
-        document['awsform']['file'].value = '';
+        bucket.post(key, html, 'text/html', success);
     }
     function auth() {
         try {
