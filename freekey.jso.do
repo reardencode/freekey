@@ -3,4 +3,4 @@ redo-ifchange $DEPS
 java -jar closure/compiler.jar \
     --compilation_level ADVANCED_OPTIMIZATIONS \
     --js fkclip.swf.js --js freekey.js \
-    --externs freekey-externs.js > $3 
+    --externs freekey-externs.js

@@ -1,5 +1,5 @@
 DEPS="fkclip.swf"
 redo-ifchange $DEPS
-echo "var fkclip = '\\" > $3
-openssl base64 -in $DEPS|sed -e 's/$/\\/' >> $3
-echo "';" >> $3
+echo "var fkclip = '\\"
+openssl base64 -in $DEPS|sed -e 's/$/\\/'
+echo "';"

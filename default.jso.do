@@ -1,2 +1,2 @@
 redo-ifchange $1.js
-java -jar closure/compiler.jar --js $1.js > $3
+java -jar closure/compiler.jar --js $1.js
