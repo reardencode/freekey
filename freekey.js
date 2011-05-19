@@ -1,28 +1,3 @@
-var ZERO_CLIPBOARD="\
-Q1dTCYgGAAB4nH1V61LbRhTeXV2OJNsYczFgIEC4JCGABSRpSy+B2JDQQtWJocl0\
-BqK1tUZqhOSRZAj/8ih9hz5AXsGZTl+ndHUhxU2nO56z3/l05uye7+wc6xr6DeUx\
-qpcUhFCNXF9ffxjNcYhRo8U8NruO0IeRLTkm+BpEa4i8/+t3GRGUrRf5tktDe41d\
-MC8Kpd14Q/DM911GPfHCd6zCLyzwa67Tafo0sAppuOWEHZdeyY1O4ERMbnajyPcK\
-IYteUM+qdYPQD/It12m9jX2XBcSx5EYUON6ZwunOEXsXAY+O94HsAu8iFnjULe1m\
-YN/je5u2WLnvAsnRNGrZ6rnfDZlxwQKxRV1XSd1ulPJ1/9KDBB13pDCiZ2ygEdsG\
-j2WHvsXU3dc7taM3e/tHanjDZVqEV2HEzpUGa3V5dVd4Ocfz+5d1/5w6nnbgU4sF\
-+17bFwPfjzT3k691aEDPGb92KBvNX1krmrOjqLNVrVLLb7K1ln9e3WlsVjd0/Um1\
-2XXcyPFy6ZHdyHHDkT5tt1JtF/rJerqn6Wu+F/ErsWCmPyiRjrYi54KlgZP/k2Tq\
-9gPYSh5APZOYBVra2VicAtfyn+4qZwHt2E4rVJvszPH2HNcVD2lkS5eOxW3b9f1A\
-tplzZkeKFdDLl/wkibodmyrUsmq241raYdye5ECpdrBf+2GQf0ncA4c3gJelHRrH\
-jd03xs+7L9UMHh9lZN149aOSwuOfcnFO3qQmbb0V44aoSVEXlHeikXQzz1/bpzek\
-8E50XN6o4r/KLfQpU/pMx/J/yz9cxmWhDOOyhMqD5SkJjQnKYnmpIlfuVe5XHlSW\
-Kw8rC6QoEayoWk7MFwaKg6Whx4AJEBGIBEQGQQFJBaKBlAMpD6QA0gCQIsglICNA\
-xkGYAFIBMgkwDWQGhFkgc0DuApkHsqDmMZAVIKtA1oBUgejqOmc21E1uHwF5DOQJ\
-4C+AfAnkKyBbQL4G8g2Qb4F8B+o2wA6QZ4DrIOyCsAfCcw0lUwR/ZvgiOP3IhwgW\
-cDZIsCipIpJkPmskBBiBgpGiIqQJOJdYPqbiOaRiUcRIQ5hrIfT055ySiKYVzMLK\
-kKmuDM8aAyInyW1yNCOF22Q5I8Xb5FhGSjLR8n/gnv5q+U+9t4/MojnYLtEhc3jl\
-jjGCGT4Z7bXL7bG9Udwefz9xjk9Vhl3crtjqqXwifS8hWzblJToZmylTbk+vYuMO\
-jsECWjZnkuDZvTmcwbscGvOiKVcxXThZNGVjkQebS+17pmLcJwl8sI1v4PI2uYEP\
-t4UbuLItxrCwoplgrMagaOZTENf2NK0NryE8gWRCVE3p6ae5j3aOFwyZb8of6RT3\
-FYn7Y9yvmjlDx1mKGncSfVTC9Z/v6QyZE7q5rpsburmpm490U+K/12g6WXYc+nR4\
-CKX/H31zGG1z5m9Pt5ok";
-    
 /* This helps compression without combining compilation with sjcl */
 var chars = {
     punctuation: '`~!@#$%^&*()-_=+[]{}\\|;:\'",<.>/?',
@@ -242,7 +217,8 @@ function freekey_start(data) {
 /**
  * @constructor
  */
-function FKPack(pass, pack, version) {
+function FKPack(bucket, pass, pack, version) {
+    this.bucket = bucket;
     if (version === undefined) {
         this.ver = 0;
     } else {
@@ -287,6 +263,7 @@ FKPack.prototype = {
         var kd = username + '@' + identifier;
         var id_div = $('<div class="identifier"></div>').text(kd);
         id_div.appendTo(outer);
+        var cb_div = $("<span class='fkcb'>copy</span>").appendTo(id_div);
         var id_del = $(del).appendTo(id_div).click(function() {
             fkp.del(identifier, username);
             outer.slideUp(400, function() {$(this).remove();});
@@ -321,12 +298,22 @@ FKPack.prototype = {
         return keys;
     },
     show_list: function() {
+        var fkp = this;
         var pl = $('#password_list').empty();
         var ids = this._sorted_keys(this.pwdb);
         for (var i=0; i<ids.length; i++) {
             var uns = this._sorted_keys(this.pwdb[ids[i]]);
             for (var j=0; j<uns.length; j++) {
-                pl.append(this._make_entry(ids[i], uns[j]));
+                var entry = this._make_entry(ids[i], uns[j]); 
+                pl.append(entry);
+                entry.find('span.fkcb').fkclip({
+                    'textfn': function() {
+                        var id = ids[i], un = uns[j]
+                        return fkp.get(id, un)[0] || '';
+                    },
+                    'container': entry.find('div.identifier'),
+                    'moviePath': fkp.bucket.uri('fkclip.swf', 10)
+                });
             }
         }
     },
@@ -450,7 +437,7 @@ FK.prototype = {
             console.log("init_list");
             var key = $(data).find('Contents Key').last().text();
             if (!key) {
-                fk.pack = new FKPack(fk.pass);
+                fk.pack = new FKPack(fk.bucket, fk.pass);
                 fk.pack.show_list();
                 fk.done();
                 return;
@@ -462,7 +449,7 @@ FK.prototype = {
                     freekey_error("Found future pack format, upgrade?");
                     return;
                 }
-                fk.pack = new FKPack(fk.pass, data, version);
+                fk.pack = new FKPack(fk.bucket, fk.pass, data, version);
                 fk.pack.show_list();
                 fk.done();
             }
@@ -473,7 +460,7 @@ FK.prototype = {
             fk.bucket.list('pack.', init_list, freekey_error);
         }
         fk.bucket.putBytes(
-                'ZeroClipboard.swf', ZERO_CLIPBOARD, init, freekey_error);
+                'fkclip.swf', fkclip, init, freekey_error);
     },
     sync: function(f) {
         var fk = this;
@@ -554,7 +541,7 @@ FK.prototype = {
                     freekey_error("Found future pack format, upgrade?");
                     return;
                 }
-                pack = new FKPack(fk.pass, data, version);
+                pack = new FKPack(fk.bucket, fk.pass, data, version);
                 if (!fk.pack.modified) {
                     fk.pack = pack;
                     fk.pack.show_list();

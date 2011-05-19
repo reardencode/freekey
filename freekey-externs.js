@@ -210,7 +210,7 @@ var jQuery = {
         "innerWidth": function () {},
         "outerWidth": function () {},
         "width": function () {},
-        "zeroclip": function() {}
+        "fkclip": function() {}
     },
     "extend": function () {},
     "noConflict": function () {},

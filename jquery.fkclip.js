@@ -1,33 +1,26 @@
 /**
- * jQuery plugin to talk to ZeroClipboard.swf
+ * jQuery plugin to talk to a clipboard
  * Author: Brandon Smith <freedom@reardencode.com>
- * Adapted from ZeroClipboard.js by Joseph Huckaby
- * Connects to ZeroClipboard.swf by Joseph Huckaby
+ * Adapted from ZeroClipboard by Joseph Huckaby
  */
 
 
 (function($) {
     var clients = {};
     var nextId = 1;
-
-    window['ZeroClipboard'] = {};
-    window['ZeroClipboard']['dispatch'] = function(id, eventName, args) {
-        /* ZeroClipboard.swf touchpoint -- send events to specific clients */
-        if (id in clients) clients[id].receiveEvent(eventName, args);
-    }
+    var bound = false;
     
     /**
      * @constructor
      */
-    function zeroclip(elem, options) {
-        console.log(elem, options);
+    function fkclip(elem, options) {
         $.extend(this, options);
 
         this.spot = elem;
         this.ready = false;
         this.movie = null;
         this.id = nextId++;
-        this.movieId = 'ZeroClipboardMovie_' + this.id;
+        this.movieId = 'fkclip_movie_' + this.id;
         clients[this.id] = this;
 
         // find X/Y position of spot
@@ -36,36 +29,37 @@
         // create floating DIV above element
         this.div = $('<div></div>').css(box);
 
-        $('body').append(this.div);
+        if (this.container) {
+            this.container.append(this.div);
+        } else {
+            $('body').append(this.div);
+        }
         
-        this.div.append(this.getEmbed(box['width'], box['height']));
+        this.div.html(this.getEmbed(this.spot.width(), this.spot.height()));
     }
 
-    zeroclip.prototype = {
+    fkclip.prototype = {
         text: '',
         textfn: null,
         handCursor: true,
         cssEffects: true,
         container: null,
-        moviePath: 'ZeroClipboard.swf',
+        moviePath: 'fkclip.swf',
         
         bbox: function() {
             var s = this.spot;
             var info;
             if (this.container) {
-                console.log('getting offset from container');
                 info = {'top': 0, 'left': 0};
                 var cur = s;
                 do {
                     info['top'] += cur.position()['top'];
                     info['left'] += cur.position()['left'];
                     cur = cur.offsetParent();
-                } while (cur != this.container);
+                } while (cur[0] && cur[0] != this.container[0]);
             } else {
-                console.log('getting offset from ', s);
                 info = s.offset();
             }
-            console.log(info);
             info['top'] = info['top'] + 'px';
             info['left'] = info['left'] + 'px';
             info['width'] = s.width() + 'px';
@@ -77,67 +71,64 @@
         
         getEmbed: function(width, height) {
             // return HTML for movie
-            var embed;
             var flashvars = 'id=' + this.id + 
                 '&width=' + width + 
                 '&height=' + height;
             var uri = this.moviePath;
+
+            var attrs = {
+                "id": this.movieId,
+                "align": "middle",
+                "width": width + 'px',
+                "height": height + 'px'
+            };
+
+            var params = {
+                "flashvars": flashvars,
+                "allowFullScreen": "false",
+                "allowScriptAccess": "always",
+                "loop": "false",
+                "menu": "false",
+                "quality": "best",
+                "bgcolor": "#ffffff",
+                "wmode": "transparent"
+            };
                 
+            var embed;
             if (navigator.userAgent.match(/MSIE/)) {
                 // IE gets an OBJECT tag
                 var cb = location.href.match(/^https/i)?'https://':'http://';
                 cb += 'download.macromedia.com';
                 cb += '/pub/shockwave/cabs/flash/swflash.cab#version=9,0,0,0';
                 var classid = 'clsid:d27cdb6e-ae6d-11cf-96b8-444553540000';
-                var flashvars =
-                    $('<param name="flashvars"/>').attr('value',flashvars);
-                embed = $('<object align="middle"></object>').
-                    attr('classid', classid).attr('id', this.movieId).
-                    attr('width', width).attr('height', height).
-                    attr('codebase', cb).append(movie).append(flashvars).
-                    append($('<param name="movie"/>').attr('value', uri));
-                    append('<param name="allowFullScreen" value="false" />').
-                    append('<param name="allowScriptAccess" value="always" />').
-                    append('<param name="loop" value="false" />').
-                    append('<param name="menu" value="false" />').
-                    append('<param name="quality" value="best" />').
-                    append('<param name="bgcolor" value="#ffffff" />').
-                    append('<param name="wmode" value="transparent"/>');
+                $.extend(attrs, {"classid": classid, "codebase": cb});
+                $.extend(params, {"movie": uri});
+                embed = $('<object></object>');
             } else {
                 // all other browsers get an EMBED tag
-                embed = $('<embed></embed>').attr('id', this.movieId).
-                    attr('src', uri).attr('loop', 'false').
-                    attr('quality', 'best').attr('wmode', 'transparent').
-                    attr('bgcolor', '#ffffff').attr('name', this.movieId).
-                    attr('width', width).attr('height', height).
-                    attr('aligh', 'middle').attr('allowFullScreen', 'false').
-                    attr('allowScriptAccess', 'always').attr('menu', 'false').
-                    attr('flashvars', flashvars).
-                    attr('type', 'application/x-shockwave-flash').
-                    attr('pluginspage',
-                            "http://www.macromedia.com/go/getflashplayer");
+                var embed_attrs = {
+                    'src': uri,
+                    'name': this.movieId,
+                    'type': 'application/x-shockwave-flash',
+                    'pluginspage': "http://www.macromedia.com/go/getflashplayer"
+                };
+                $.extend(attrs, params, embed_attrs);
+                params = {};
+                embed = $('<embed></embed>');
             }
+            embed.attr(attrs);
+            var p = '<param></param>';
+            for (var k in params)
+                embed.append($(p).attr({'name': k, 'value': params[k]}));
             return embed;
-        },
-        
-        hide: function() {
-            // temporarily hide floater offscreen
-            if (this.div) {
-                this.div.css('left', '-2000px');
-            }
-        },
-        
-        show: function() {
-            // show ourselves after a call to hide()
-            this.reposition();
         },
         
         destroy: function() {
             // destroy control and floater
             if (this.spot && this.div) {
-                this.hide();
+                this.div.css('left', '-2000px');
                 this.div.html('').remove();
-                this.spot.removeData('zeroclip');
+                this.spot.removeData('fkclip');
                 this.spot = null;
                 this.div = null;
                 this.ready = false;
@@ -151,6 +142,7 @@
         },
         
         receiveEvent: function(eventName, args) {
+            console.log(eventName, args);
             eventName = eventName.toString().toLowerCase().replace(/^on/, '');
             switch (eventName) {
                 case 'load':
@@ -183,7 +175,6 @@
                         if (this.recoverActive) this.spot.addClass('active');
                     }
                     if (this.textfn) {
-                        this.movie = document.getElementById(this.movieId);
                         this.movie.setText(this.textfn(this.spot));
                     }
                     break;
@@ -213,10 +204,10 @@
     };
 
     /**
-     * @example $('#name').zeroclip({'textfn':function(client){client.setText($('#name').text());}});
-     *          Attach a zeroclip instance to #name and set its text as the
+     * @example $('#name').fkclip({'textfn':function(client){client.setText($('#name').text());}});
+     *          Attach a fkclip instance to #name and set its text as the
      *          text to be copied before it's clicked
-     * @example $(window).resize(function() {$('#name').data('zeroclip').reposition();});
+     * @example $(window).resize(function() {$('#name').data('fkclip').reposition();});
      *          Reposition the clipboard flash on window resize
      *
      * @option container a jQuery element for relative flash movie positioning
@@ -228,10 +219,19 @@
      * @option cssEffects boolean whether or not to add 'active' and 'hover'
      *                    css classes in appropriate cases
      */
-    $.fn.zeroclip = function(options) {
+    $.fn.fkclip = function(options) {
+        if (!bound) {
+            window['fkclip'] = {};
+            window['fkclip']['dispatch'] = function(id, eventName, args) {
+                /* ZeroClipboard.swf touchpoint -- send events to specific clients */
+                if (id in clients) clients[id].receiveEvent(eventName, args);
+            }
+            bound = true;
+        }
+    
         this.each(function() {
             var elem = $(this);
-            elem.data('zeroclip', new zeroclip(elem, options));
+            elem.data('fkclip', new fkclip(elem, options));
         });
     }
 })(jQuery);
