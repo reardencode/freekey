@@ -1,3 +1,4 @@
+.do_built*
 .redo
 index.html
 *.jso

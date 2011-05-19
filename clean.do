@@ -1,2 +1,2 @@
-rm -f index.html fkclip.swf
-find build -type f ! -name '*.do' -exec rm {} \;
+rm -f index.html
+find build -type f ! -name 'do' ! -name '*.do' -mindepth 1 -maxdepth 1 -exec rm {} \;
