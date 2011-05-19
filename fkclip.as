@@ -1,6 +1,7 @@
 ﻿package {
-    // Simple Set Clipboard System
-    // Author: Joseph Huckaby
+    // Flash component for jQuery fkclip plugin
+    // Author: Brandon Smith
+    // Adapted from ZeroClipboard by Joseph Huckaby
     
     import flash.display.Stage;
     import flash.display.Sprite;
@@ -16,19 +17,17 @@
  
     public class fkclip extends Sprite {
         
-        private var id:String = '';
-        private var button:Sprite;
-        private var clipText:String = '';
+        private var id:String;
         
         public function fkclip():void {
             // constructor, setup event listeners and external interfaces
             
             // import flashvars
-            var flashvars:Object = LoaderInfo( this.root.loaderInfo ).parameters;
+            var flashvars:Object = LoaderInfo(this.root.loaderInfo).parameters;
             id = flashvars.id;
 
             // invisible button covers entire stage
-            button = new Sprite();
+            var button:Sprite = new Sprite();
             button.graphics.beginFill(0xFF0000);
             button.alpha = 0.0;
             button.graphics.drawRect(0, 0, stage.stageWidth, stage.stageHeight);
@@ -37,46 +36,36 @@
             button.y = 0;
             addChild(button);
             button.buttonMode = true;
-            button.useHandCursor = true;
+            button.useHandCursor = Boolean(int(flashvars.handCursor));
             button.addEventListener(MouseEvent.CLICK, clickHandler);
             
-            button.addEventListener(MouseEvent.MOUSE_OVER, function(event:Event):void {
-                ExternalInterface.call( 'fkclip.dispatch', id, 'mouseOver', null );
-            } );
-            button.addEventListener(MouseEvent.MOUSE_OUT, function(event:Event):void {
-                ExternalInterface.call( 'fkclip.dispatch', id, 'mouseOut', null );
-            } );
-            button.addEventListener(MouseEvent.MOUSE_DOWN, function(event:Event):void {
-                ExternalInterface.call( 'fkclip.dispatch', id, 'mouseDown', null );
-            } );
-            button.addEventListener(MouseEvent.MOUSE_UP, function(event:Event):void {
-                ExternalInterface.call( 'fkclip.dispatch', id, 'mouseUp', null );
-            } );
-            
-            // external functions
-            ExternalInterface.addCallback("setHandCursor", setHandCursor);
-            ExternalInterface.addCallback("setText", setText);
-            
-            // signal to the browser that we are ready
-            ExternalInterface.call( 'fkclip.dispatch', id, 'load', null );
+            button.addEventListener(MouseEvent.MOUSE_OVER,
+                function(event:Event):void {
+                    ExternalInterface.call('fkclip_dispatch', id, 'over');
+                }
+            );
+            button.addEventListener(MouseEvent.MOUSE_OUT,
+                function(event:Event):void {
+                    ExternalInterface.call('fkclip_dispatch', id, 'out');
+                }
+            );
+            button.addEventListener(MouseEvent.MOUSE_DOWN,
+                function(event:Event):void {
+                    ExternalInterface.call('fkclip_dispatch', id, 'down');
+                }
+            );
+            button.addEventListener(MouseEvent.MOUSE_UP,
+                function(event:Event):void {
+                    ExternalInterface.call('fkclip_dispatch', id, 'up');
+                }
+            );
+            ExternalInterface.call('fkclip_dispatch', id, 'loaded');
         }
-        
-        public function setText(newText:String):void {
-            // set the maximum number of files allowed
-            clipText = newText;
-        }
-        
-        public function setHandCursor(enabled:Boolean):void {
-            // control whether the hand cursor is shown on rollover (true)
-            // or the default arrow cursor (false)
-            button.useHandCursor = enabled;
-        }
-        
+
         private function clickHandler(event:Event):void {
-            // user click copies text to clipboard
-            // as of flash player 10, this MUST happen from an in-movie flash click event
-            System.setClipboard( clipText );
-            ExternalInterface.call( 'fkclip.dispatch', id, 'complete', null );
+            System.setClipboard(String(ExternalInterface.call(
+                    'fkclip_dispatch', id, 'click')));
+            ExternalInterface.call('fkclip_dispatch', id, 'complete');
         }
     }
 }

@@ -17,25 +17,21 @@
         $.extend(this, options);
 
         this.spot = elem;
-        this.ready = false;
-        this.movie = null;
         this.id = nextId++;
         this.movieId = 'fkclip_movie_' + this.id;
         clients[this.id] = this;
 
-        // find X/Y position of spot
         var box = this.bbox();
         
         // create floating DIV above element
         this.div = $('<div></div>').css(box);
-
         if (this.container) {
             this.container.append(this.div);
         } else {
             $('body').append(this.div);
         }
         
-        this.div.html(this.getEmbed(this.spot.width(), this.spot.height()));
+        this.div.html(this.getEmbed());//this.spot.width(), this.spot.height()));
     }
 
     fkclip.prototype = {
@@ -55,8 +51,9 @@
                 do {
                     info['top'] += cur.position()['top'];
                     info['left'] += cur.position()['left'];
+                    if (cur[0] == cur.offsetParent()[0]) break;
                     cur = cur.offsetParent();
-                } while (cur[0] && cur[0] != this.container[0]);
+                } while (cur[0] != this.container[0] && cur[0] != $('body')[0]);
             } else {
                 info = s.offset();
             }
@@ -69,18 +66,17 @@
             return info;
         },
         
-        getEmbed: function(width, height) {
+        getEmbed: function() {//width, height) {
             // return HTML for movie
             var flashvars = 'id=' + this.id + 
-                '&width=' + width + 
-                '&height=' + height;
+                '&handCursor=' + (this.handCursor?1:0);
             var uri = this.moviePath;
 
             var attrs = {
                 "id": this.movieId,
                 "align": "middle",
-                "width": width + 'px',
-                "height": height + 'px'
+                "width": '100%',//width + 'px',
+                "height": '100%'//height + 'px'
             };
 
             var params = {
@@ -100,8 +96,7 @@
                 var cb = location.href.match(/^https/i)?'https://':'http://';
                 cb += 'download.macromedia.com';
                 cb += '/pub/shockwave/cabs/flash/swflash.cab#version=9,0,0,0';
-                var classid = 'clsid:d27cdb6e-ae6d-11cf-96b8-444553540000';
-                $.extend(attrs, {"classid": classid, "codebase": cb});
+                $.extend(attrs, {"classid": uri, "codebase": cb});
                 $.extend(params, {"movie": uri});
                 embed = $('<object></object>');
             } else {
@@ -125,77 +120,46 @@
         
         destroy: function() {
             // destroy control and floater
-            if (this.spot && this.div) {
-                this.div.css('left', '-2000px');
-                this.div.html('').remove();
-                this.spot.removeData('fkclip');
-                this.spot = null;
-                this.div = null;
-                this.ready = false;
-            }
+            this.div.css('left', '-2000px').html('').remove();
+            this.spot.removeData('fkclip');
+            this.spot = null;
+            this.div = null;
+            delete clients[this.id];
         },
         
         reposition: function() {
-            if (this.spot && this.div) {
-                this.div.css(this.bbox(this.spot));
-            }
+            this.div.css(this.bbox());
         },
         
-        receiveEvent: function(eventName, args) {
-            console.log(eventName, args);
-            eventName = eventName.toString().toLowerCase().replace(/^on/, '');
+        receiveEvent: function(eventName) {
+            eventName = eventName.toString().toLowerCase();
             switch (eventName) {
-                case 'load':
-                    var zc = this;
-                    /* movie claims it is ready, but in IE this isn't always
-                       the case...  bug fix: Cannot extend EMBED DOM elements
-                       in Firefox, must use traditional function */
-                    this.movie = document.getElementById(this.movieId);
-                    if (!this.movie) {
-                        setTimeout(
-                                function(){zc.receiveEvent('load',null);},1);
-                        return;
-                    }
-                    /* firefox on pc needs a "kick" in order to set these in
-                       certain cases */
-                    if (!this.ready && navigator.userAgent.match(/Firefox/) &&
-                            navigator.userAgent.match(/Windows/)) {
-                        setTimeout(
-                                function(){zc.receiveEvent('load',null);},100);
-                        this.ready = true;
-                        return;
-                    }
-                    this.ready = true;
-                    this.movie.setText(this.text);
-                    this.movie.setHandCursor(this.handCursor);
-                    break;
-                case 'mouseover':
-                    if (this.spot && this.cssEffects) {
-                        this.spot.addClass('hover');
-                        if (this.recoverActive) this.spot.addClass('active');
-                    }
-                    if (this.textfn) {
-                        this.movie.setText(this.textfn(this.spot));
+                case 'click':
+                    if (this.textfn) return this.textfn(this.spot);
+                    return this.text;
+                case 'over':
+                    if (this.cssEffects) {
+                        this.spot.addClass('fkclip_hover');
+                        if (this.recoverActive)
+                            this.spot.addClass('fkclip_active');
                     }
                     break;
-                case 'mouseout':
-                    if (this.spot && this.cssEffects) {
+                case 'out':
+                    if (this.cssEffects) {
                         this.recoverActive = false;
-                        if (this.spot.hasClass('active')) {
-                            this.spot.removeClass('active');
+                        if (this.spot.hasClass('fkclip_active')) {
+                            this.spot.removeClass('fkclip_active');
                             this.recoverActive = true;
                         }
-                        this.spot.removeClass('hover');
+                        this.spot.removeClass('fkclip_hover');
                     }
                     break;
-                case 'mousedown':
-                    if (this.spot && this.cssEffects) {
-                        this.spot.addClass('active');
-                    }
+                case 'down':
+                    if (this.cssEffects) this.spot.addClass('fkclip_active');
                     break;
-                case 'mouseup':
-                    if (this.spot && this.cssEffects) {
-                        this.spot.removeClass('active');
+                case 'up':
+                    if (this.cssEffects) {
+                        this.spot.removeClass('fkclip_active');
                         this.recoverActive = false;
                     }
                     break;
@@ -221,10 +185,9 @@
      */
     $.fn.fkclip = function(options) {
         if (!bound) {
-            window['fkclip'] = {};
-            window['fkclip']['dispatch'] = function(id, eventName, args) {
-                /* ZeroClipboard.swf touchpoint -- send events to specific clients */
-                if (id in clients) clients[id].receiveEvent(eventName, args);
+            window['fkclip_dispatch'] = function(id, eventName) {
+                /* fkclip.swf touchpoint -- send events to specific clients */
+                if (id in clients) return clients[id].receiveEvent(eventName);
             }
             bound = true;
         }

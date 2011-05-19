@@ -260,10 +260,17 @@ FKPack.prototype = {
         var del = '<span class="del">delete</span>';
         var key = '<span class="key"></span>';
 
-        var kd = username + '@' + identifier;
+        var kd = username + '@' + identifier + '\n';
         var id_div = $('<div class="identifier"></div>').text(kd);
         id_div.appendTo(outer);
         var cb_div = $("<span class='fkcb'>copy</span>").appendTo(id_div);
+        cb_div.fkclip({
+            'textfn': function(elem) {
+                return fkp.get(identifier, username)[0] || '';
+            },
+            'container': id_div,
+            'moviePath': fkp.bucket.uri('fkclip.swf', 10)
+        });
         var id_del = $(del).appendTo(id_div).click(function() {
             fkp.del(identifier, username);
             outer.slideUp(400, function() {$(this).remove();});
@@ -304,18 +311,12 @@ FKPack.prototype = {
         for (var i=0; i<ids.length; i++) {
             var uns = this._sorted_keys(this.pwdb[ids[i]]);
             for (var j=0; j<uns.length; j++) {
-                var entry = this._make_entry(ids[i], uns[j]); 
-                pl.append(entry);
-                entry.find('span.fkcb').fkclip({
-                    'textfn': function() {
-                        var id = ids[i], un = uns[j]
-                        return fkp.get(id, un)[0] || '';
-                    },
-                    'container': entry.find('div.identifier'),
-                    'moviePath': fkp.bucket.uri('fkclip.swf', 10)
-                });
+                pl.append(this._make_entry(ids[i], uns[j]));
             }
         }
+        $('span.fkcb').each(function() {
+            $(this).data('fkclip')['reposition']();
+        });
     },
     del: function(identifier, username, i) {
         if (username === undefined) {
