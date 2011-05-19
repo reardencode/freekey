@@ -1,3 +1,4 @@
+var fkclip = '';
 var sjcl = {
     "cipher": {
         "aes": function () {}

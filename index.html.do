@@ -1,4 +1,4 @@
-DEPS="sjcl/sjcl.min.js build/jquery.patched.jso build/jquery.fkclip.jso build/jquery.postmsg.jso build/freekey.jso"
+DEPS="sjcl/sjcl.min.js build/fkclip.swf.jso build/jquery.patched.jso build/jquery.fkclip.jso build/jquery.postmsg.jso build/freekey.jso"
 redo-ifchange $DEPS
 cat head.tmpl
 for dep in $DEPS; do
