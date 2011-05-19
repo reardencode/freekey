@@ -1,0 +1,44 @@
+--- jquery-clean/jquery-1.6.js	2011-05-18 14:48:35.000000000 -0700
++++ jquery/jquery-1.6.js	2011-05-19 14:02:03.000000000 -0700
+@@ -6826,6 +6826,7 @@
+ 		cache: null,
+ 		traditional: false,
+ 		headers: {},
++		binaryData: false,
+ 		*/
+ 
+ 		accepts: {
+@@ -7757,7 +7758,15 @@
+ 					// Do send the request
+ 					// This may raise an exception which is actually
+ 					// handled in jQuery.ajax (so no try/catch here)
+-					xhr.send( ( s.hasContent && s.data ) || null );
++					if (!s.hasContent) {
++						xhr.send(null);
++					} else {
++						if (s.binaryData) {
++							xhr.sendAsBinary(s.data);
++						} else {
++							xhr.send(s.data);
++						}
++					}
+ 
+ 					// Listener
+ 					callback = function( _, isAbort ) {
+@@ -8860,6 +8869,16 @@
+ 
+ });
+ 
++if (!('sendAsBinary' in XMLHttpRequest.prototype)) {
++	XMLHttpRequest.prototype.sendAsBinary = function(datastr) {
++		function byteValue(x) {
++			return x.charCodeAt(0) & 0xff;
++		}
++		var ords = Array.prototype.map.call(datastr, byteValue);
++		var ui8a = new Uint8Array(ords);
++		this.send(ui8a.buffer);
++	};
++}
+ 
+ window.jQuery = window.$ = jQuery;
+ })(window);

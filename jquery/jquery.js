@@ -6826,7 +6826,6 @@ jQuery.extend({
 		cache: null,
 		traditional: false,
 		headers: {},
-        binaryData: false,
 		*/
 
 		accepts: {
@@ -7758,15 +7757,7 @@ if ( jQuery.support.ajax ) {
 					// Do send the request
 					// This may raise an exception which is actually
 					// handled in jQuery.ajax (so no try/catch here)
-                    if (!s.hasContent) {
-                        xhr.send(null);
-                    } else {
-                        if (s.binaryData) {
-                            xhr.sendAsBinary(s.data);
-                        } else {
-                            xhr.send(s.data);
-                        }
-                    }
+					xhr.send( ( s.hasContent && s.data ) || null );
 
 					// Listener
 					callback = function( _, isAbort ) {
@@ -8869,16 +8860,6 @@ jQuery.each([ "Height", "Width" ], function( i, name ) {
 
 });
 
-if (!('sendAsBinary' in XMLHttpRequest.prototype)) {
-    XMLHttpRequest.prototype.sendAsBinary = function(datastr) {
-        function byteValue(x) {
-            return x.charCodeAt(0) & 0xff;
-        }
-        var ords = Array.prototype.map.call(datastr, byteValue);
-        var ui8a = new Uint8Array(ords);
-        this.send(ui8a.buffer);
-    };
-}
 
 window.jQuery = window.$ = jQuery;
 })(window);

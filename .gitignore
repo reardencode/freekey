@@ -1,2 +1,6 @@
-*.py[co]
+index.html
+*.jso
 *.swp
+build/*.js
+build/*.as
+build/*.swf
