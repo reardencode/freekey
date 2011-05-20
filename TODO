@@ -1,5 +1,15 @@
-Need to warn the user visually if there are unmerged duplicates.
+Reencryption
+
+Ability to send an encrypted link to setup additional browsers (ie what's normally saved in a cookie / localStorage as a link).
+
+Button to receive from clipboard and find a password by URL.
+
+Maybe try to use postMessage to allow a bookmarklet ot retrieve user/pass combinations for other tabs.
+
+Warn the user visually if there are unmerged duplicates.
 
 More UI cleanups.
 
 Error handling when HTTP timeout and stuff like that.
+
+Some kind of test suite.
