@@ -13,3 +13,5 @@ More UI cleanups.
 Error handling when HTTP timeout and stuff like that.
 
 Some kind of test suite.
+
+Make the clickable elements of the password list tab selectable.
