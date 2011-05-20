@@ -57,12 +57,13 @@
             } else {
                 info = s.offset();
             }
-            info['top'] = info['top'] + 'px';
-            info['left'] = info['left'] + 'px';
-            info['width'] = s.width() + 'px';
-            info['height'] = s.height() + 'px';
-            info['position'] = 'absolute';
-            info['zIndex'] = s.css('zIndex')?s.css('zIndex')+1:99;
+            for (var k in info) info[k] += parseInt(s.css('padding-'+k), 10);
+            $.extend(info, {'width': s.width(), 'height': s.height()});
+            for (var k in info) info[k] += 'px';
+            $.extend(info, {
+                'position': 'absolute',
+                'zIndex': s.css('zIndex')?s.css('zIndex')+1:99
+            });
             return info;
         },
         
@@ -136,7 +137,6 @@
         
         receiveEvent: function(eventName) {
             var fkc = this;
-            console.log(eventName);
             eventName = eventName.toString().toLowerCase();
             switch (eventName) {
                 case 'loaded':
