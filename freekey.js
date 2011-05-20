@@ -256,28 +256,28 @@ FKPack.prototype = {
     },
     _make_entry: function(identifier, username) {
         var fkp = this;
-        var outer = $('<div></div>');
-        var del = '<span class="del">delete</span>';
+        var outer = $('<div class="pwouter"></div>');
         var key = '<span class="key"></span>';
 
         var kd = username + '@' + identifier + '\n';
-        var id_div = $('<div class="identifier"></div>').text(kd);
-        id_div.appendTo(outer);
-        var cb_div = $("<span class='fkcb'>copy</span>").appendTo(id_div);
+        var pi_div = $('<div class="pwinner"></div>').appendTo(outer);
+        pi_div.append($('<div class="identifier"></div>').text(kd));
+        var cb_div = $("<span class='fkcb'>copy</span>").appendTo(pi_div);
         cb_div.fkclip({
             'textfn': function(elem) {
                 return fkp.get(identifier, username)[0] || '';
             },
-            'container': id_div,
+            'container': pi_div,
             'moviePath': fkp.bucket.uri('fkclip.swf', 10)
         });
-        var id_del = $(del).appendTo(id_div).click(function() {
+        var id_del = $('<span class="del">delete</span>').appendTo(pi_div);
+        id_del.click(function() {
             fkp.del(identifier, username);
             outer.slideUp(400, function() {$(this).remove();});
         });
 
         var pw_div = $('<div class="password"></div>').appendTo(outer);
-        id_div.click(function() {
+        pi_div.click(function() {
             pw_div.empty();
             var pwc = $('<div class="close">close</div>');
             pwc.appendTo(pw_div).click(function() {
@@ -285,9 +285,10 @@ FKPack.prototype = {
             });
             var pws = fkp.get(identifier, username);
             for (var i=0; i<pws.length; i++) {
-                var d = $('<div></div>').appendTo(pw_div).text(pws[i]);
+                var d = $('<div class="onepw"></div>').appendTo(pw_div).text(pws[i]);
                 var pw_key = $(key).appendTo(d).text(i);
-                var pw_del = $(del).appendTo(d).click(function() {
+                var pw_del = $('<div class="del">delete</div>').appendTo(d);
+                pw_del.click(function() {
                     fkp.del(identifier, username, i);
                     d.remove();
                     if (pw_div.find('div').length == 1) id_del.click();
@@ -351,7 +352,7 @@ FKPack.prototype = {
         var n = this._make_entry(identifier, username).hide();
         var added = false;
         $('#password_list > div').each(function() {
-            var i = $(this).find('span.identifier').text().split('@');
+            var i = $(this).find('div.identifier').text().split('@');
             if (i[1] > identifier || i[1] == identifier && i[0] > username) {
                 n.insertBefore(this);
                 added = true;

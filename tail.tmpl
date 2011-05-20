@@ -14,6 +14,7 @@
             }
             #error { display: none border: 1px solid #d06060; color: #d06060; }
             #status { border: 1px solid #6060d0; color: #6060d0; }
+            .modified { color: #a02020; display: none; }
             .clear { clear: both; }
             div.content { float: left; padding: 5px; margin: 5px; }
             #password_pane { clear: left; }
@@ -22,22 +23,25 @@
             #password_list > div:nth-child(even) { background-color: #bfffbf; }
             #password_list > div:nth-child(odd) { background-color: #b0dfff; }
             span.key { display: none; }
-            .identifier { cursor: pointer; position: relative; }
-            .modified { color: #a02020; display: none; }
+            .identifier { cursor: pointer; float: left; }
+            .pwinner { position: relative; text-align: right; }
             .password {
                 background-color: #ffffbf;
                 display: none;
                 overflow: hidden;
                 padding: 5px;
+                clear: both;
             }
             .close, .del, .fkcb {
                 cursor: pointer;
                 font-size: 75%;
             }
-            .fkcb { color: #0000af; }
-            .close, .del { color: #af0000; }
-            .close { float: right; }
-            .del { padding: 0 5px; }
+            .fkcb { color: #0000af; padding: 0 5px; }
+            .close { color: #0000af; }
+            .close, div.del { float: right; }
+            div.del { padding-top: 3px; }
+            .onepw { clear: both; }
+            .del { color: #af0000; padding: 0 5px; }
             #random_password span.xt, #random_password span.rt { cursor: default; }
             #random_password span.xt {
                 padding: 0 2px 2px 2px;
