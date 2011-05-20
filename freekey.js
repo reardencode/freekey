@@ -258,9 +258,8 @@ FKPack.prototype = {
         var fkp = this;
         var outer = $('<div class="pwouter"></div>');
 
-        var kd = username + '@' + identifier + '\n';
         var pi_div = $('<div class="pwinner"></div>').appendTo(outer);
-        pi_div.append($('<div class="identifier"></div>').text(kd));
+        var id_div = $('<div class="identifier"></div>').appendTo(pi_div);
         var cb_div = $("<span class='fkcb'>copy</span>").appendTo(pi_div);
         cb_div.fkclip({
             'textfn': function(elem) {
@@ -272,11 +271,14 @@ FKPack.prototype = {
         var id_del = $('<span class="del">delete</span>').appendTo(pi_div);
         id_del.click(function() {
             fkp.del(identifier, username);
-            outer.slideUp(400, function() {$(this).remove();});
+            outer.slideUp(400, function() {
+                $(this).remove();
+                fkp._move_fkclips();
+            });
         });
 
         var pw_div = $('<div class="password"></div>').appendTo(outer);
-        pi_div.click(function() {
+        id_div.text(username+'@'+identifier).click(function() {
             pw_div.empty();
             var pwc = $('<div class="close">close</div>');
             pwc.appendTo(pw_div).click(function() {
@@ -315,9 +317,7 @@ FKPack.prototype = {
                 pl.append(this._make_entry(ids[i], uns[j]));
             }
         }
-        $('span.fkcb').each(function() {
-            $(this).data('fkclip')['reposition']();
-        });
+        fkp._move_fkclips();
     },
     del: function(identifier, username, i) {
         if (username === undefined) {
@@ -360,8 +360,13 @@ FKPack.prototype = {
             }
         });
         if (!added) $('#password_list').append(n);
-        n.slideDown();
-        n.find('span.fkcb').each(function() {
+        var fkp = this;
+        n.slideDown(400, function() {fkp._move_fkclips(n);});
+        fkp._move_fkclips();
+    },
+    _move_fkclips: function(outer) {
+        var m = outer?outer.find:$;
+        m('span.fkcb').each(function() {
             $(this).data('fkclip')['reposition']();
         });
     },
