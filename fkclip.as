@@ -13,11 +13,14 @@
     import flash.external.ExternalInterface;
     import flash.system.Security;
     import flash.utils.*;
-    import flash.system.System;
+    import flash.desktop.Clipboard;
+    import flash.desktop.ClipboardFormats;
  
     public class fkclip extends Sprite {
         
         private var id:String;
+        private var button:Sprite;
+        private var text:String;
         
         public function fkclip():void {
             // constructor, setup event listeners and external interfaces
@@ -27,13 +30,8 @@
             id = flashvars.id;
 
             // invisible button covers entire stage
-            var button:Sprite = new Sprite();
-            button.graphics.beginFill(0xFF0000);
+            button = new Sprite();
             button.alpha = 0.0;
-            button.graphics.drawRect(0, 0, stage.stageWidth, stage.stageHeight);
-            button.graphics.endFill();
-            button.x = 0;
-            button.y = 0;
             addChild(button);
             button.buttonMode = true;
             button.useHandCursor = Boolean(int(flashvars.handCursor));
@@ -59,13 +57,25 @@
                     ExternalInterface.call('fkclip_dispatch', id, 'up');
                 }
             );
+            ExternalInterface.addCallback('clear', function():void{text='';});
+            ExternalInterface.addCallback('redraw', redraw);
+            redraw();
+
             ExternalInterface.call('fkclip_dispatch', id, 'loaded');
         }
 
+        private function redraw():void {
+            button.graphics.clear();
+            button.graphics.beginFill(0xFF0000);
+            button.graphics.drawRect(0, 0, stage.stageWidth, stage.stageHeight);
+            button.graphics.endFill();
+        }
+
         private function clickHandler(event:Event):void {
-            System.setClipboard(String(ExternalInterface.call(
-                    'fkclip_dispatch', id, 'click')));
-            ExternalInterface.call('fkclip_dispatch', id, 'complete');
+            text = ExternalInterface.call('fkclip_dispatch', id, 'click');
+            flash.desktop.Clipboard.generalClipboard.clear();
+            flash.desktop.Clipboard.generalClipboard.setDataHandler(
+                ClipboardFormats.TEXT_FORMAT, function():String{return text;});
         }
     }
 }

@@ -92,7 +92,7 @@ function freekey_encrypt(ciph, salt, data, n) {
 }
 function freekey_error(message) {
     if (arguments.length > 1) {
-        console.log(arguments[0]);
+        /*console.log(arguments[0]);*/
         message = arguments[1] + ': ' + arguments[2];
     }
     if (message) {
@@ -435,7 +435,7 @@ FK.prototype = {
         var fk = this;
         freekey_status("Initializing...");
         function init_list(data) {
-            console.log("init_list");
+            /*console.log("init_list");*/
             var key = $(data).find('Contents Key').last().text();
             if (!key) {
                 fk.pack = new FKPack(fk.bucket, fk.pass);
@@ -445,7 +445,7 @@ FK.prototype = {
             }
             var version = fk._version(key);
             function init_load(data) {
-                console.log("init_load");
+                /*console.log("init_load");*/
                 if (data['packformat'] > 2) {
                     freekey_error("Found future pack format, upgrade?");
                     return;
@@ -457,7 +457,7 @@ FK.prototype = {
             fk.bucket.get(key, init_load, freekey_error);
         }
         function init(data) {
-            console.log("init");
+            /*console.log("init");*/
             fk.bucket.list('pack.', init_list, freekey_error);
         }
         fk.bucket.putBytes(
@@ -465,7 +465,7 @@ FK.prototype = {
     },
     sync: function(f) {
         var fk = this;
-        console.log("sync");
+        /*console.log("sync");*/
         if (fk.syncing) {
             fk.done(false);
             return;
@@ -483,7 +483,7 @@ FK.prototype = {
     },
     lockretry: function(data) {
         var fk = this;
-        console.log("locking");
+        /*console.log("locking");*/
         fk.lock_tries++;
         if (fk.lock_tries > 15) {
             freekey_error('Retries exceeded, manual unlock needed?');
@@ -492,17 +492,17 @@ FK.prototype = {
             freekey_status("Retrying lock: " + fk.lock_tries);
         }
         function lockverify(data) {
-            console.log('Mine', fk.uuid, 'got', data);
+            /*console.log('Mine', fk.uuid, 'got', data);*/
             if (data !== fk.uuid) { fk.lockretry(data); return; }
             freekey_status("Listing packs...");
             fk.sync_list(true);
         }
         function lockget(data) {
-            console.log("getting lock to verify");
+            /*console.log("getting lock to verify");*/
             fk.bucket.get('lock', lockverify, freekey_error);
         }
         function lockdown(data) {
-            console.log("setting policy");
+            /*console.log("setting policy");*/
             fk.bucket.setPolicy(fk.bucket.make_policy(['pack.*','lock']),
                     lockget, freekey_error);
         }
@@ -520,7 +520,7 @@ FK.prototype = {
     sync_list: function(locked) {
         var fk = this;
         function process_list(data) {
-            console.log("process sync list");
+            /*console.log("process sync list");*/
             var list = $(data);
             fk.lastlist = list;
             var lastkey = list.find('Contents Key').last().text();
@@ -537,7 +537,7 @@ FK.prototype = {
             }
             freekey_status("Merging newer pack...");
             function merge(data) {
-                console.log("merge");
+                /*console.log("merge");*/
                 if (data['packformat'] > 2) {
                     freekey_error("Found future pack format, upgrade?");
                     return;
@@ -559,7 +559,7 @@ FK.prototype = {
     },
     savepack: function() {
         var fk = this;
-        console.log("savepack");
+        /*console.log("savepack");*/
         var names = ['lock'];
         fk.pack_tries = -1;
         if (fk.lastlist) {
@@ -572,7 +572,7 @@ FK.prototype = {
             fk.unlock(data);
         }
         function saveretry(data) {
-            console.log("saveretry");
+            /*console.log("saveretry");*/
             fk.pack_tries++;
             if (fk.pack_tries > 2) {
                 freekey_error('Retries exceeded, will try again shortly');
@@ -592,9 +592,9 @@ FK.prototype = {
     },
     unlock: function(data) {
         var fk = this;
-        console.log("unlock");
+        /*console.log("unlock");*/
         function cleanup(data) {
-            console.log("cleanup");
+            /*console.log("cleanup");*/
             if (fk.lastlist) {
                 var list = fk.lastlist.find('Contents');
                 delete fk.lastlist;
@@ -615,7 +615,7 @@ FK.prototype = {
     },
     done: function(show) {
         var fk = this;
-        console.log("done");
+        /*console.log("done");*/
         fk.syncing = false;
         if (show === undefined || show) freekey_status_done("Done...");
         $('#password_entry').fadeIn();
@@ -717,7 +717,6 @@ S3Bucket.prototype = {
         });
     },
     post: function(key, data, contentType, success) {
-        console.log('post', key, contentType, success);
         var origin = this.origin();
         var expires = new Date();
         expires.setTime(expires.getTime() + 5000);
@@ -745,7 +744,6 @@ S3Bucket.prototype = {
             load(function(){success($(this).unbind('load'));});
         $('#awsform').attr('target', tid).
             attr('action',origin).attr('method','post').submit();
-        console.log('posted');
         document['awsform']['file'].value = '';
     },
     _put: function(key, data, success, error, ct, md5, async, binary) {

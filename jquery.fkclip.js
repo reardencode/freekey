@@ -122,45 +122,58 @@
             // destroy control and floater
             this.div.css('left', '-2000px').html('').remove();
             this.spot.removeData('fkclip');
-            this.spot = null;
-            this.div = null;
+            delete this.spot;
+            delete this.div;
+            delete this.ready;
             delete clients[this.id];
         },
         
         reposition: function() {
+            if (!this.ready) return;
             this.div.css(this.bbox());
+            $('#'+this.movieId)[0].redraw();
         },
         
         receiveEvent: function(eventName) {
+            var fkc = this;
+            console.log(eventName);
             eventName = eventName.toString().toLowerCase();
             switch (eventName) {
+                case 'loaded':
+                    fkc.ready = true;
+                    fkc.reposition();
+                    break;
                 case 'click':
-                    if (this.textfn) return this.textfn(this.spot);
-                    return this.text;
+                    if (fkc.timer) clearTimeout(fkc.timer);
+                    fkc.timer = setTimeout(
+                            function() {$('#'+fkc.movieId)[0].clear();},
+                            30000);
+                    if (fkc.textfn) return fkc.textfn(fkc.spot);
+                    return fkc.text;
                 case 'over':
-                    if (this.cssEffects) {
-                        this.spot.addClass('fkclip_hover');
-                        if (this.recoverActive)
-                            this.spot.addClass('fkclip_active');
+                    if (fkc.cssEffects) {
+                        fkc.spot.addClass('fkclip_hover');
+                        if (fkc.recoverActive)
+                            fkc.spot.addClass('fkclip_active');
                     }
                     break;
                 case 'out':
-                    if (this.cssEffects) {
-                        this.recoverActive = false;
-                        if (this.spot.hasClass('fkclip_active')) {
-                            this.spot.removeClass('fkclip_active');
-                            this.recoverActive = true;
+                    if (fkc.cssEffects) {
+                        fkc.recoverActive = false;
+                        if (fkc.spot.hasClass('fkclip_active')) {
+                            fkc.spot.removeClass('fkclip_active');
+                            fkc.recoverActive = true;
                         }
-                        this.spot.removeClass('fkclip_hover');
+                        fkc.spot.removeClass('fkclip_hover');
                     }
                     break;
                 case 'down':
-                    if (this.cssEffects) this.spot.addClass('fkclip_active');
+                    if (fkc.cssEffects) fkc.spot.addClass('fkclip_active');
                     break;
                 case 'up':
-                    if (this.cssEffects) {
-                        this.spot.removeClass('fkclip_active');
-                        this.recoverActive = false;
+                    if (fkc.cssEffects) {
+                        fkc.spot.removeClass('fkclip_active');
+                        fkc.recoverActive = false;
                     }
                     break;
             }
