@@ -257,7 +257,6 @@ FKPack.prototype = {
     _make_entry: function(identifier, username) {
         var fkp = this;
         var outer = $('<div class="pwouter"></div>');
-        var key = '<span class="key"></span>';
 
         var kd = username + '@' + identifier + '\n';
         var pi_div = $('<div class="pwinner"></div>').appendTo(outer);
@@ -285,11 +284,12 @@ FKPack.prototype = {
             });
             var pws = fkp.get(identifier, username);
             for (var i=0; i<pws.length; i++) {
-                var d = $('<div class="onepw"></div>').appendTo(pw_div).text(pws[i]);
-                var pw_key = $(key).appendTo(d).text(i);
+                var idx = i;
+                var d = $('<div class="onepw"></div>');
+                d.text(pws[i]).appendTo(pw_div);
                 var pw_del = $('<div class="del">delete</div>').appendTo(d);
                 pw_del.click(function() {
-                    fkp.del(identifier, username, i);
+                    fkp.del(identifier, username, idx);
                     d.remove();
                     if (pw_div.find('div').length == 1) id_del.click();
                 });
@@ -361,10 +361,13 @@ FKPack.prototype = {
         });
         if (!added) $('#password_list').append(n);
         n.slideDown();
+        n.find('span.fkcb').each(function() {
+            $(this).data('fkclip')['reposition']();
+        });
     },
     _close: function(identifier, username) {
         var k = username+'@'+identifier;
-        $('div.identifier:contains('+k+')').parent().find('.close').click();
+        $('div.pwouter:contains('+k+')').find('.close').click();
     },
     add: function(identifier, username, password) {
         var pl;
@@ -406,10 +409,10 @@ FKPack.prototype = {
     set_modified: function(value) {
         this.modified = value;
         if (value) {
-            $('.modified').fadeIn();
+            $('.modified div').fadeIn();
             window.freekey.set_sync(5);
         } else {
-            $('.modified').fadeOut();
+            $('.modified div').fadeOut();
         }
     }
 };

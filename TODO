@@ -1,5 +1,3 @@
-Deleting single passwords (when there are multiple) is not working.
-
 Need to warn the user visually if there are unmerged duplicates.
 
 More UI cleanups.

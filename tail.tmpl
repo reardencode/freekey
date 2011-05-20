@@ -14,7 +14,8 @@
             }
             #error { display: none border: 1px solid #d06060; color: #d06060; }
             #status { border: 1px solid #6060d0; color: #6060d0; }
-            .modified { color: #a02020; display: none; }
+            .modified div { color: #a02020; display: none; }
+            .modified { height: 1em; }
             .clear { clear: both; }
             div.content { float: left; padding: 5px; margin: 5px; }
             #password_pane { clear: left; }
@@ -100,7 +101,7 @@
             <div id='error'></div>
             <div id='status_holder'><div id='status'></div></div>
             <div class='clear'>Welcome to FreeKey!</div>
-            <div class='clear modified'>Unsaved changes!</div>
+            <div class='clear modified'><div>Unsaved changes!</div></div>
             <div class='content' id='password_pane'>
                 <div id='password_list'></div>
             </div>
