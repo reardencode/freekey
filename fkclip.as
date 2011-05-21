@@ -73,8 +73,8 @@
 
         private function clickHandler(event:Event):void {
             text = ExternalInterface.call('fkclip_dispatch', id, 'click');
-            flash.desktop.Clipboard.generalClipboard.clear();
-            flash.desktop.Clipboard.generalClipboard.setDataHandler(
+            Clipboard.generalClipboard.clear();
+            Clipboard.generalClipboard.setDataHandler(
                 ClipboardFormats.TEXT_FORMAT, function():String{return text;});
         }
     }
