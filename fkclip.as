@@ -71,11 +71,15 @@
             button.graphics.endFill();
         }
 
+        private function getText():String { return text; }
+
         private function clickHandler(event:Event):void {
             text = ExternalInterface.call('fkclip_dispatch', id, 'click');
             Clipboard.generalClipboard.clear();
             Clipboard.generalClipboard.setDataHandler(
-                ClipboardFormats.TEXT_FORMAT, function():String{return text;});
+                    ClipboardFormats.TEXT_FORMAT, getText);
+            Clipboard.generalClipboard.setDataHandler(
+                    ClipboardFormats.HTML_FORMAT, getText);
         }
     }
 }
