@@ -1,6 +1,8 @@
---- jquery-clean/jquery-1.6.js	2011-05-18 14:48:35.000000000 -0700
-+++ jquery/jquery-1.6.js	2011-05-19 14:02:03.000000000 -0700
-@@ -6826,6 +6826,7 @@
+diff --git a/jquery/jquery.js b/jquery/jquery.js
+index 8ccd0ea..d3abaac 100644
+--- a/jquery/jquery.js
++++ b/jquery/jquery.js
+@@ -7156,6 +7156,7 @@ jQuery.extend({
  		cache: null,
  		traditional: false,
  		headers: {},
@@ -8,7 +10,7 @@
  		*/
  
  		accepts: {
-@@ -7757,7 +7758,15 @@
+@@ -8099,7 +8100,15 @@ if ( jQuery.support.ajax ) {
  					// Do send the request
  					// This may raise an exception which is actually
  					// handled in jQuery.ajax (so no try/catch here)
@@ -25,9 +27,9 @@
  
  					// Listener
  					callback = function( _, isAbort ) {
-@@ -8860,6 +8869,16 @@
+@@ -9167,6 +9176,16 @@ function getWindow( elem ) {
  
- });
+ 
  
 +if (!('sendAsBinary' in XMLHttpRequest.prototype)) {
 +	XMLHttpRequest.prototype.sendAsBinary = function(datastr) {
@@ -40,5 +42,5 @@
 +	};
 +}
  
- window.jQuery = window.$ = jQuery;
- })(window);
+ // Create width, height, innerHeight, innerWidth, outerHeight and outerWidth methods
+ jQuery.each([ "Height", "Width" ], function( i, name ) {
