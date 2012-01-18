@@ -923,7 +923,7 @@ $(document).ready(function() {
         $('.main').show();
         var origin = window.location.origin;
         if (origin === 'file://') origin = '*'; /* Hate this a bit */
-        $.postmsg.send(window.top, '*', 'loaded', undefined,
+        $.postmsg.send(window.top, origin, 'loaded', undefined,
                 {'success': freekey_start});
     }
 });
