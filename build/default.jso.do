@@ -1,2 +1,3 @@
-redo-ifchange ../$1.js
-java -jar closure/compiler.jar --js ../$1.js
+F="../${1%\.*}.js"
+redo-ifchange $F
+java -jar closure/compiler.jar --js $F

@@ -109,12 +109,10 @@ function freekey_status(message) {
     }
 }
 function freekey_status_done(message) {
-    $('#status').text(message).fadeIn().
-        delay(2000).fadeOut(400, function(){$(this).empty();});
+    $('#status').text(message).fadeIn().delay(2000).fadeOut(400, function(){$(this).empty();});
 }
 function freekey_unload() {
-    return "Are you sure you want to leave?  You will need to" +
-        " reenter your password to continue using FreeKey.";
+    return "Are you sure you want to leave?  You will need to reenter your password to continue using FreeKey.";
 };
 function freekey_start(data) {
     $(document['add_form']).submit(function(e) {
@@ -249,8 +247,7 @@ function FKPack(bucket, pass, pack, version) {
 
 FKPack.prototype = {
     string_crypt: function() {
-        var out = freekey_encrypt(
-                this.ciph, this.salt, this.pwdb, 'contents');
+        var out = freekey_encrypt(this.ciph, this.salt, this.pwdb, 'contents');
         out['packformat'] = this.packformat;
         return out;
     },
@@ -572,8 +569,7 @@ FK.prototype = {
         var names = ['lock'];
         fk.pack_tries = -1;
         if (fk.lastlist) {
-            fk.lastlist.find('Contents Key').each(
-                    function() {names.push($(this).text());});
+            fk.lastlist.find('Contents Key').each(function() {names.push($(this).text());});
         }
         function savedone(data) {
             fk.pack.ver++;
@@ -592,12 +588,10 @@ FK.prototype = {
                 freekey_status("Retrying save: " + fk.pack_tries);
             }
             var out = fk.pack.string_crypt();
-            fk.bucket.putJson(fk._key(fk.pack.ver+1), out,
-                    savedone, saveretry, false);
+            fk.bucket.putJson(fk._key(fk.pack.ver+1), out, savedone, saveretry, false);
         }
         freekey_status("Saving pack...");
-        fk.bucket.setPolicy(fk.bucket.make_policy(names),
-                saveretry, freekey_error);
+        fk.bucket.setPolicy(fk.bucket.make_policy(names), saveretry, freekey_error);
     },
     unlock: function(data) {
         var fk = this;
@@ -674,13 +668,11 @@ S3Bucket.prototype = {
     uri: function(resource, expires) {
         var ds = Math.round(new Date().getTime()/1000) + (expires || 0);
         var code = this.authString(resource, ds);
-        return this.origin() + '/' + resource +
-            '?AWSAccessKeyId=' + encodeURIComponent(this.access_key) +
-            '&Expires=' + ds + '&Signature=' + encodeURIComponent(code);
+        var params = { "AWSAccessKeyId": this.access_key, "Expires": ds, "Signature": code };
+        return this.origin() + '/' + resource + '?' + $.param(params);
     },
     sign: function(data) {
-        var hm = new fksjcl.hmac(
-                fksjcl.utf8String.toBits(this.secret_key), fksjcl.sha1);
+        var hm = new fksjcl.hmac(fksjcl.utf8String.toBits(this.secret_key), fksjcl.sha1);
         return fksjcl.base64.fromBits(hm.encrypt(data));
     },
     authHeaders: function(resource, verb, md5, type, amzheaders) {
@@ -691,8 +683,7 @@ S3Bucket.prototype = {
         amzheaders['Authorization'] = 'AWS ' + this.access_key + ':' + code;
         return amzheaders;
     },
-    authString: function(
-            resource, dateString, verb, md5, type, amzheaders) {
+    authString: function(resource, dateString, verb, md5, type, amzheaders) {
         var key;
         var parts = [];
         parts.push(verb || 'GET');
@@ -712,8 +703,7 @@ S3Bucket.prototype = {
             parts.push(key+':'+lc_amzheaders[key]);
         }
         parts.push('/' + this.bucket + '/' + resource);
-        var hm = new fksjcl.hmac(
-                fksjcl.utf8String.toBits(this.secret_key), fksjcl.sha1);
+        var hm = new fksjcl.hmac(fksjcl.utf8String.toBits(this.secret_key), fksjcl.sha1);
         return fksjcl.base64.fromBits(hm.encrypt(parts.join('\n')));
     },
     del: function(key, success, error) {
@@ -738,8 +728,7 @@ S3Bucket.prototype = {
                 {'redirect': origin}
             ]
         };
-        policy = fksjcl.base64.fromBits(
-                fksjcl.utf8String.toBits(JSON.stringify(policy)));
+        policy = fksjcl.base64.fromBits(fksjcl.utf8String.toBits(JSON.stringify(policy)));
         document['awsform']['key'].value = key;
         document['awsform']['policy'].value = policy;
         document['awsform']['file'].value = data;
@@ -747,12 +736,10 @@ S3Bucket.prototype = {
         document['awsform']['signature'].value = this.sign(policy);
         document['awsform']['redirect'].value = origin;
         document['awsform']['Content-Type'].value = contentType;
-        var tid = new Date().getTime();
-        var target = $('<iframe></iframe>').attr('name', tid).
-            attr('id', tid).addClass('postable').appendTo($('body')).
-            load(function(){success($(this).unbind('load'));});
-        $('#awsform').attr('target', tid).
-            attr('action',origin).attr('method','post').submit();
+        var tid = new Date().getTime().toString(36);
+        var target = $('<iframe></iframe>').attr('name', tid).attr('id', tid).addClass('postable');
+        target.appendTo($('body')).load(function(){success($(this).unbind('load'));});
+        $('#awsform').attr('target', tid).attr('action',origin).attr('method','post').submit();
         document['awsform']['file'].value = '';
     },
     _put: function(key, data, success, error, ct, md5, async, binary) {
@@ -774,8 +761,7 @@ S3Bucket.prototype = {
     putBytes: function(key, b64data, success, error, ct) {
         var ct = ct || 'application/octet-stream';
         var data = atob(b64data);
-        var md5 = fksjcl.base64.fromBits(
-                sjcl.hash.md5.hash(fksjcl.base64.toBits(b64data)));
+        var md5 = fksjcl.base64.fromBits(sjcl.hash.md5.hash(fksjcl.base64.toBits(b64data)));
         this._put(key, data, success, error, ct, md5, false, true);
     },
     putString: function(key, data, success, error, ct, async) {
@@ -802,8 +788,8 @@ S3Bucket.prototype = {
     },
     list: function(prefix, success, error) {
         var headers = this.authHeaders();
-        var qs = prefix?'?prefix=' + encodeURIComponent(prefix):'';
-        $.ajax(this.origin() + qs, {
+        var qs = prefix?$.param({'prefix': prefix}):'';
+        $.ajax(this.origin() + '?' + qs, {
             'headers': headers,
             'success': success,
             'error': error
@@ -813,8 +799,7 @@ S3Bucket.prototype = {
 
 $(document).ready(function() {
     var useCookie = false;
-    if ($.browser['mozilla'] ||
-        $.browser['webkit'] && $.browser['version'] == 532.2) {
+    if ($.browser['mozilla'] || $.browser['webkit'] && $.browser['version'] == 532.2) {
         useCookie = true;
     }
     function show_init(id, error) {
@@ -827,8 +812,7 @@ $(document).ready(function() {
         $('#'+id).slideDown();
     }
     function iframe(pass, rc) {
-        var bucket = new S3Bucket(
-            rc['s3_bucket'], rc['aws_access'], rc['aws_secret']);
+        var bucket = new S3Bucket(rc['s3_bucket'], rc['aws_access'], rc['aws_secret']);
         var key = 'index.html';
         function success(elem) {
             $.postmsg.listen(bucket.origin(), 'loaded', function() {
@@ -921,9 +905,6 @@ $(document).ready(function() {
     } else {
         $('#init').hide();
         $('.main').show();
-        var origin = window.location.origin;
-        if (origin === 'file://') origin = '*'; /* Hate this a bit */
-        $.postmsg.send(window.top, origin, 'loaded', undefined,
-                {'success': freekey_start});
+        $.postmsg.send(window.top, '*', 'loaded', undefined, {'success': freekey_start});
     }
 });
