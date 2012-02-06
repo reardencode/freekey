@@ -1,0 +1,3 @@
+To build from SJCL source:
+% ./configure --without-all --with-aes --with-md5 --with-hmac --with-pbkdf2 --with-random --with-codecHex --with-codecBase64 --with-ccm --with-sha1 --with-codecString                                                                         /Users/Brandon/sjcl 15:15:58 0
+% make

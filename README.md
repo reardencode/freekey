@@ -9,7 +9,7 @@ FreeKey is an easy way to manage all of your passwords.
 
 [Click here](http://reardencode.github.com/freekey) to give FreeKey a try.
 
-To build FreeKey from a git checkout, you just need Java (to run [Closure](http://code.google.com/closure/)) and Flex SDK 4.5 in your home directory, to build fkclip (I know, this is stupid, I'll fix it soon).  Just checkout FreeKey and run either `redo` (if you have [apenwarr's redo](http://github.com/apenwarrredo) installed) or `build/do` .  The resulting index.html is a complete FreeKey, open it in your browser and have fun.
+To build FreeKey from a git checkout, you just need Java (to run [Closure](http://code.google.com/closure/)) and Flex SDK 4.6 in your home directory, to build fkclip (I know, this is stupid, maybe I'll fix it some day).  Just checkout FreeKey and run either `redo` (if you have [apenwarr's redo](http://github.com/apenwarrredo) installed) or `build/do` .  The resulting index.html is a complete FreeKey, open it in your browser and have fun.
 
 To use FreeKey, you need an Amazon S3 account and a bucket for it.  When you open FreeKey for the first time in any browser, you will be asked for your Amazon AWS credentials and S3 bucket.  This information is never sent to anyone, but is instead stored AES encrypted with your password in your browser's localStorage system.
 
@@ -49,6 +49,6 @@ Design Goals
 Dependencies
 ------------
 
- - Modern browser with localStorage and GET/POST/PUT/DELETE ajax support
+ - Modern browser with localStorage (FreeKey will fall back to cookies if needed0 and GET/POST/PUT/DELETE ajax support
  - FreeKey uses SJCL and jQuery, both of these are included in the source
  repository for convenience.
