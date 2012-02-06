@@ -7,6 +7,7 @@ var chars = {
 }
 var fksjcl = {
     sha1: sjcl.hash.sha1,
+    md5: sjcl.hash.md5,
     hmac: sjcl.misc.hmac,
     base64: {
         toBits: sjcl.codec.base64.toBits,
@@ -51,7 +52,7 @@ function freekey_generate(length, charset, req) {
     for (var i=0; i<length; i++) bag[i] = i;
     for (var k in req) {
         if (tmp < bag.length)
-            tmp = sjcl.random.randomWords(1,0)[0] & 0x7fffffff;
+            tmp = fksjcl.random.randomWords(1,0)[0] & 0x7fffffff;
         special[bag.splice(tmp % bag.length, 1)[0]] = k;
         tmp = (tmp / (bag.length+1))|0;
     }
@@ -59,7 +60,7 @@ function freekey_generate(length, charset, req) {
         var cs = charset;
         if (i in special) cs = req[special[i]];
         if (tmp < cs.length)
-            tmp = sjcl.random.randomWords(1,0)[0] & 0x7fffffff;
+            tmp = fksjcl.random.randomWords(1,0)[0] & 0x7fffffff;
         out += cs[tmp % cs.length];
         tmp = (tmp / (cs.length+1))|0;
     }
@@ -761,12 +762,12 @@ S3Bucket.prototype = {
     putBytes: function(key, b64data, success, error, ct) {
         var ct = ct || 'application/octet-stream';
         var data = atob(b64data);
-        var md5 = fksjcl.base64.fromBits(sjcl.hash.md5.hash(fksjcl.base64.toBits(b64data)));
+        var md5 = fksjcl.base64.fromBits(fksjcl.md5.hash(fksjcl.base64.toBits(b64data)));
         this._put(key, data, success, error, ct, md5, false, true);
     },
     putString: function(key, data, success, error, ct, async) {
         ct = ct || 'text/plain';
-        var md5 = fksjcl.base64.fromBits(sjcl.hash.md5.hash(data));
+        var md5 = fksjcl.base64.fromBits(fksjcl.md5.hash(data));
         this._put(key, data, success, error, ct, md5, async);
     },
     putJson: function(key, data, success, error, async) {
