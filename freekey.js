@@ -4,11 +4,14 @@ var chars = {
     upper: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ',
     lower: 'abcdefghijklmnopqrstuvwxyz',
     digits: '0123456789'
-}
+};
 var fksjcl = {
     sha1: sjcl.hash.sha1,
     md5: sjcl.hash.md5,
     hmac: sjcl.misc.hmac,
+    pbkdf2: function(pass, salt) {
+        return sjcl.misc.pbkdf2(pass, salt, 1000, 256);
+    },
     base64: {
         toBits: sjcl.codec.base64.toBits,
         fromBits: sjcl.codec.base64.fromBits
@@ -27,7 +30,7 @@ var fksjcl = {
     },
     aes: sjcl.cipher.aes,
     random: sjcl.random
-}
+};
 function freekey_cookie(name, value, expires) {
     var e = encodeURIComponent;
     if (value !== undefined) {
@@ -67,19 +70,15 @@ function freekey_generate(length, charset, req) {
     return out;
 }
 function freekey_ciph(pass, salt) {
-    return new fksjcl.aes(sjcl.misc.pbkdf2(pass, salt, 1000, 256));
+    /* This duplicates the first two lines of freekey_decrypt, w/e for now */
+    if (typeof salt === 'string') salt = fksjcl.base64.toBits(salt);
+    return new fksjcl.aes(fksjcl.pbkdf2(pass, salt));
 }
-function freekey_decrypt(pass, o, n, out) {
+function freekey_decrypt(ciph, o, n) {
     for (var k in o)
         if (typeof o[k] === 'string') o[k] = fksjcl.base64.toBits(o[k]);
-    var ciph = freekey_ciph(pass, o['salt']);
     var pt = fksjcl.ccm.decrypt(ciph, o[n], o['iv']);
-    var ret = JSON.parse(fksjcl.utf8String.fromBits(pt));
-    if (out) {
-        out.ciph = ciph;
-        out.salt = o['salt'];
-    }
-    return ret;
+    return JSON.parse(fksjcl.utf8String.fromBits(pt));
 }
 function freekey_encrypt(ciph, salt, data, n) {
     var out = {
@@ -94,7 +93,7 @@ function freekey_encrypt(ciph, salt, data, n) {
 function freekey_error(message) {
     if (arguments.length > 1) {
         /*console.log(arguments[0]);*/
-        message = arguments[1] + ': ' + arguments[2];
+        message = arguments[2] + ': ' + arguments[2];
     }
     if (message) {
         $('#error').append($('<div></div>').text(message)).slideDown();
@@ -114,47 +113,18 @@ function freekey_status_done(message) {
 }
 function freekey_unload() {
     return "Are you sure you want to leave?  You will need to reenter your password to continue using FreeKey.";
-};
+}
 function freekey_start(data) {
-    $(document['add_form']).submit(function(e) {
-        e.preventDefault();
-
-        $(this).find('.error').remove();
-        var errors = $();
-
-        var identifier = $('#identifier').val();
-        if (identifier.length == 0) errors = errors.add($('#identifier'));
-
-        var username = $('#username').val();
-        if (username.length == 0) errors = errors.add($('#username'));
-
-        var password;
-        var type = $('input:radio[name="pwtype"]:checked').val();
-        if (type == 'manual_password') {
-            password = $('#manpass').val();
-            if (password.length == 0) errors = errors.add($('#manpass'));
-        } else {
-            password = $('#password').text();
-            if (password.length == 0) errors = errors.add($('#password'));
-        }
-
-        if (errors.length > 0) {
-            errors.each(function() {
-                $(this).after('<span class="error">Required</span>');
-            });
-            return;
-        }
-
-        $('#identifier, #username, #manpass').val('');
-        $('#password').text('');
-        window.freekey.pack.add(identifier, username, password);
-    });
-    $('#unlock_button').click(function() {
-        if (confirm("You sure you want to force unlock?"))
-            window.freekey.bucket.delPolicy();
-    });
-    $('#sync_button').click(function() {
-        window.freekey.sync();
+    $('#reencrypt_button').click(function() {
+        $('#oldpass, #newpass1, #newpass2').val('');
+        var button = $(this);
+        var reencrypt = $('div.reencrypt').slideToggle(callback=function() {
+            if ($(this).is(':visible')) {
+                button.val('Cancel master pass phrase change');
+            } else {
+                button.val('Change master pass phrase');
+            }
+        });
     });
     $('#password_type input').click(function() {
         $('div.password_type').hide();
@@ -209,8 +179,52 @@ function freekey_start(data) {
     freekey_status("Loading...");
     var pass = data[0];
     var b = data[1];
+    var rc_salt = data[2];
     var bucket = new S3Bucket(b.bucket, b.access_key, b.secret_key);
-    window.freekey = new FK(pass, bucket);
+    window.freekey = new FK(pass, bucket, rc_salt);
+    $(document['add_form']).submit(function(e) {
+        e.preventDefault();
+
+        $(this).find('.error').remove();
+        var errors = $();
+
+        var identifier = $('#identifier').val();
+        if (identifier.length == 0) errors = errors.add($('#identifier'));
+
+        var username = $('#username').val();
+        if (username.length == 0) errors = errors.add($('#username'));
+
+        var password;
+        var type = $('input:radio[name="pwtype"]:checked').val();
+        if (type == 'manual_password') {
+            password = $('#manpass').val();
+            if (password.length == 0) errors = errors.add($('#manpass'));
+        } else {
+            password = $('#password').text();
+            if (password.length == 0) errors = errors.add($('#password'));
+        }
+
+        if (errors.length > 0) {
+            errors.each(function() {
+                $(this).after('<span class="error">Required</span>');
+            });
+            return;
+        }
+
+        $('#identifier, #username, #manpass').val('');
+        $('#password').text('');
+        window.freekey.pack.add(identifier, username, password);
+    });
+    $('#do_reencrypt').click(function() {
+        window.freekey.reencrypt();
+    });
+    $('#unlock_button').click(function() {
+        if (confirm("You sure you want to force unlock?"))
+            window.freekey.bucket.delPolicy();
+    });
+    $('#sync_button').click(function() {
+        window.freekey.sync();
+    });
 }
 
 /**
@@ -230,7 +244,9 @@ function FKPack(bucket, pass, pack, version) {
         this.ciph = freekey_ciph(pass, salt);
         this.pwdb = {};
     } else {
-        var contents = freekey_decrypt(pass, pack, 'contents', this);
+        this.salt = pack['salt'];
+        this.ciph = freekey_ciph(pass, this.salt);
+        var contents = freekey_decrypt(this.ciph, pack, 'contents');
         if (pack['packformat'] === 1) {
             this.pwdb = {};
             for (var k in contents) {
@@ -331,14 +347,17 @@ FKPack.prototype = {
         }
         this.set_modified(true);
     },
+    _pw_decrypt: function(data, ciph) {
+        ciph = ciph || this.ciph;
+        var v = fksjcl.base64.toBits(data);
+        var iv = v.splice(0,4);
+        return fksjcl.ccm.decrypt(ciph, v, iv);
+    },
     get: function(identifier, username) {
         var pl = (this.pwdb[identifier] || {})[username] || [];
         var ret = [];
         for (var i=0; i<pl.length; i++) {
-            var v = fksjcl.base64.toBits(pl[i]);
-            var iv = v.splice(0,4);
-            var password = fksjcl.ccm.decrypt(this.ciph, v, iv);
-            ret.push(fksjcl.utf8String.fromBits(password));
+            ret.push(fksjcl.utf8String.fromBits(this._pw_decrypt(pl[i])));
         }
         return ret;
     },
@@ -369,8 +388,39 @@ FKPack.prototype = {
         });
     },
     _close: function(identifier, username) {
-        var k = username+'@'+identifier;
-        $('div.pwouter:contains('+k+')').find('.close').click();
+        $('div.pwouter:contains('+username+'@'+identifier+')').find('.close').click();
+    },
+    reencrypt: function(oldpass, newpass) {
+        var saved_pwdb = this.pwdb;
+        var saved_salt = this.salt;
+        var saved_ciph = this.ciph;
+        try {
+            var old_ciph = freekey_ciph(oldpass, saved_salt);
+            this.pwdb = {};
+            this.salt = fksjcl.random.randomWords(2,0);
+            this.ciph = freekey_ciph(newpass, this.salt);
+            for (var identifier in saved_pwdb) {
+                this.pwdb[identifier] = {};
+                var uo = this.pwdb[identifier] = {};
+                for (var username in saved_pwdb[identifier]) {
+                    var pl = uo[username] = [];
+                    var opl = saved_pwdb[identifier][username];
+                    for (var i in opl) {
+                        pl.push(this._pw_encrypt(this._pw_decrypt(opl[i], old_ciph), fksjcl.random.randomWords(4,0)));
+                    }
+                }
+            }
+            this.set_modified(true, true);
+            return true;
+        } catch (ex) {
+            this.pwdb = saved_pwdb;
+            this.salt = saved_salt;
+            this.ciph = saved_ciph;
+            if (ex.toString().indexOf('CORRUPT: ') === 0) {
+                return false;
+            }
+            throw ex;
+        }
     },
     add: function(identifier, username, password) {
         var pl;
@@ -409,13 +459,19 @@ FKPack.prototype = {
         }
         this.ver = pack.ver;
     },
-    set_modified: function(value) {
+    set_modified: function(value, reencrypt) {
         this.modified = value;
         if (value) {
             $('.modified div').fadeIn();
-            window.freekey.set_sync(5);
+            if (reencrypt) {
+                this.reencrypted = true;
+                window.freekey.sync();
+            } else {
+                window.freekey.set_sync(5);
+            }
         } else {
             $('.modified div').fadeOut();
+            delete this.reencrypted;
         }
     }
 };
@@ -423,9 +479,10 @@ FKPack.prototype = {
 /**
  * @constructor
  */
-function FK(pass, bucket) {
+function FK(pass, bucket, rc_salt) {
     this.pass = pass;
     this.bucket = bucket;
+    this.rc_salt = rc_salt;
     this.syncing = false;
     this.sync_count = 0;
     this.init();
@@ -457,8 +514,16 @@ FK.prototype = {
                     freekey_error("Found future pack format, upgrade?");
                     return;
                 }
-                fk.pack = new FKPack(fk.bucket, fk.pass, data, version);
-                fk.pack.show_list();
+                try {
+                    fk.pack = new FKPack(fk.bucket, fk.pass, data, version);
+                    fk.pack.show_list();
+                } catch (ex) {
+                    if (ex.toString().indexOf('CORRUPT: ') === 0) {
+                        freekey_error("Unable to load pack, probably reencrypted since this client was configured.  Reload FreeKey and reconfigure.");
+                    } else {
+                        throw ex;
+                    }
+                }
                 fk.done();
             }
             fk.bucket.get(key, init_load, freekey_error);
@@ -467,10 +532,9 @@ FK.prototype = {
             /*console.log("init");*/
             fk.bucket.list('pack.', init_list, freekey_error);
         }
-        fk.bucket.putBytes(
-                'fkclip.swf', fkclip, init, freekey_error);
+        fk.bucket.putBytes('fkclip.swf', fkclip, init, freekey_error);
     },
-    sync: function(f) {
+    sync: function() {
         var fk = this;
         /*console.log("sync");*/
         if (fk.syncing) {
@@ -510,8 +574,7 @@ FK.prototype = {
         }
         function lockdown(data) {
             /*console.log("setting policy");*/
-            fk.bucket.setPolicy(fk.bucket.make_policy(['pack.*','lock']),
-                    lockget, freekey_error);
+            fk.bucket.setPolicy(fk.bucket.make_policy(['pack.*','lock']), lockget, freekey_error);
         }
         function lockerr(data) {
             if (data.status === 403) {
@@ -542,6 +605,16 @@ FK.prototype = {
                 }
                 return;
             }
+            if (fk.pack.reencrypted) {
+                if (!locked) {
+                    freekey_error("Should be impossible, tried to save reencrypted pack without lock");
+                    fk.done();
+                } else {
+                    freekey_error("Another client saved a pack during reencryption, those changes are hidden, but could be recovered with help from Rearden Code");
+                    fk.savepack();
+                }
+                return;
+            }
             freekey_status("Merging newer pack...");
             function merge(data) {
                 /*console.log("merge");*/
@@ -549,7 +622,15 @@ FK.prototype = {
                     freekey_error("Found future pack format, upgrade?");
                     return;
                 }
-                pack = new FKPack(fk.bucket, fk.pass, data, version);
+                try {
+                    pack = new FKPack(fk.bucket, fk.pass, data, version);
+                } catch (ex) {
+                    if (ex.toString().indexOf('CORRUPT: ') === 0) {
+                        freekey_error("Another client reencrypted the datastore, you will need to reload FreeKey and reconfigure");
+                        return;
+                    }
+                    throw ex;
+                }
                 if (!fk.pack.modified) {
                     fk.pack = pack;
                     fk.pack.show_list();
@@ -563,6 +644,34 @@ FK.prototype = {
             fk.bucket.get(lastkey, merge, freekey_error);
         }
         fk.bucket.list('pack.', process_list, freekey_error);
+    },
+    reencrypt: function() {
+        var fk = this;
+        $('#do_reencrypt').attr('disabled', true);
+        if (fk.syncing) {
+            setTimeout(fk.reencrypt, 500);
+            return;
+        }
+        try {
+            var oldpass = $('#oldpass').val()
+            var newpass = $('#newpass1').val()
+            if (newpass != $('#newpass2').val()) {
+                freekey_error("New pass phrases do not match");
+                return;
+            }
+            if (!fk.pack.reencrypt(oldpass, newpass)) {
+                freekey_error("Old password incorrect");
+                return;
+            }
+            var old_rc_key = fksjcl.pbkdf2(oldpass, this.rc_salt);
+            var new_salt = fksjcl.random.randomWords(2,0);
+            var new_rc_key = fksjcl.pbkdf2(newpass, new_salt);
+            $.postmsg.send(window.top, '*', 'reencrypt', [old_rc_key, new_rc_key, new_salt]);
+            $('#reencrypt_button').click();
+            freekey_error();
+        } finally {
+            $('#do_reencrypt').attr('disabled', false);
+        }
     },
     savepack: function() {
         var fk = this;
@@ -812,7 +921,31 @@ $(document).ready(function() {
         }
         $('#'+id).slideDown();
     }
-    function iframe(pass, rc) {
+    function load_erc() {
+        var erc;
+        if (useCookie) {
+            erc = freekey_cookie('freekey-rc');
+            freekey_cookie('freekey-rc', erc, 360); /* refresh */
+        } else {
+            erc = localStorage.getItem('freekey-rc')
+        }
+        return JSON.parse(erc);
+    }
+    function save_erc(erc) {
+        erc = JSON.stringify(erc);
+        if (useCookie) {
+            freekey_cookie('freekey-rc', erc, 360);
+        } else {
+            localStorage.setItem('freekey-rc', erc);
+        }
+    }
+    function reencrypt(data) { /* Parameters: from key, to key, to salt */
+        var from_ciph = new fksjcl.aes(data[0]);
+        var to_ciph = new fksjcl.aes(data[1]);
+        var rc = freekey_decrypt(from_ciph, load_erc(), 'value');
+        save_erc(freekey_encrypt(to_ciph, data[2], rc, 'value'));
+    }
+    function iframe(pass, rc, rc_salt) {
         var bucket = new S3Bucket(rc['s3_bucket'], rc['aws_access'], rc['aws_secret']);
         var key = 'index.html';
         function success(elem) {
@@ -820,7 +953,8 @@ $(document).ready(function() {
                 $('body').css('padding',0).css('margin',0);
                 elem.css('width','100%').css('height','100%').fadeIn();
                 $('#init, .main, script').remove();
-                return [pass, bucket];
+                $.postmsg.listen(bucket.origin(), 'reencrypt', reencrypt);
+                return [pass, bucket, rc_salt];
             });
             window.onbeforeunload = freekey_unload;
             elem.attr('src',bucket.uri(key, 5));
@@ -831,17 +965,10 @@ $(document).ready(function() {
     function auth() {
         try {
             show_init('loading');
-            var erc;
-            if (useCookie) {
-                erc = freekey_cookie('freekey-rc');
-                freekey_cookie('freekey-rc', erc, 360); /* refresh */
-            } else {
-                erc = localStorage.getItem('freekey-rc')
-            }
-            erc = JSON.parse(erc);
+            var erc = load_erc();
             var pass = document['auth_form']['authpass'].value;
-            var rc = freekey_decrypt(pass, erc, 'value');
-            iframe(pass, rc);
+            var rc = freekey_decrypt(freekey_ciph(pass, erc['salt']), erc, 'value');
+            iframe(pass, rc, erc['salt']);
         } catch (ex) {
             if (ex.toString().indexOf('CORRUPT: ') === 0) {
                 show_init('auth', 'Incorrect password');
@@ -864,21 +991,17 @@ $(document).ready(function() {
                 'aws_secret': document['conf_form']['aws_secret'].value
             };
             var salt = fksjcl.random.randomWords(2,0);
-            var ciph = freekey_ciph(pass, salt);
-            var erc = freekey_encrypt(ciph, salt, rc, 'value');
-            erc = JSON.stringify(erc);
-            if (useCookie) {
-                freekey_cookie('freekey-rc', erc, 360);
-            } else {
-                localStorage.setItem('freekey-rc', erc);
-            }
-            iframe(pass, rc);
+            save_erc(freekey_encrypt(freekey_ciph(pass, salt), salt, rc, 'value'));
+            iframe(pass, rc, salt);
         } catch (ex) {
             show_init('conf', ex.toString());
         }
     }
     $('#loading').show();
     if (window == window.top) {
+        $(document['auth_form']['reconfigure']).click(function() {
+            show_init('conf');
+        });
         $(document['auth_form']).submit(function(e) {
             $(this).submit(function(e) { return false; });
             e.preventDefault();
@@ -891,14 +1014,9 @@ $(document).ready(function() {
             conf();
             return false;
         });
-        var json
-        if (useCookie) {
-            json = freekey_cookie('freekey-rc');
-        } else {
-            json = localStorage.getItem('freekey-rc')
-        }
-        if (json) {
-            JSON.parse(json);
+        var erc;
+        try { erc = load_erc(); } catch (ex) {}
+        if (erc) {
             show_init('auth');
         } else {
             show_init('conf');

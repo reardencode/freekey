@@ -1,5 +1,5 @@
         <style>
-            div.init { display: none; }
+            div.init, div.reencrypt { display: none; }
             div.main { float: left; display: none; overflow: hidden; }
             div.init_button { width: 20em; text-align: center; clear: both; }
             div.init_label { width: 8em; clear: left; float: left; }
@@ -17,7 +17,7 @@
             .modified div { color: #a02020; display: none; }
             .modified { height: 1em; }
             .clear { clear: both; }
-            div.content { float: left; padding: 5px; margin: 5px; }
+            div.buttons, div.content { float: left; padding: 5px; margin: 5px; }
             #password_pane { clear: left; }
             #password_entry { clear: right; display: none; }
             #password_list > div { padding: 5px; }
@@ -83,6 +83,7 @@
                     <div class='init_label'><label for="authpass">Pass phrase:</label></div>
                     <div class='init_input'><input type="password" name="authpass" value=""/></div>
                     <div class="init_button"><input type="submit" name="start" value="Start FreeKey"/></div>
+                    <div class="init_button"><input type="button" name="reconfigure" value="Reconfigure"/></div>
                 </form>
             </div>
             <div class='init'>
@@ -151,7 +152,19 @@
                     <div><input type="submit" name="add" value="Add password"/></div>
                 </form>
             </div>
-            <div class='clear'>
+            <div class='reencrypt clear' id='reencrypt_pane'>
+                <div class='init_label'><label for="oldpass">Old pass phrase:</label></div>
+                <div class='init_input'><input type='password' id='oldpass' name='oldpass' value=''/></div>
+                <div class='init_label'><label for="newpass1">New pass phrase:</label></div>
+                <div class='init_input'><input type='password' id='newpass1' name='newpass1' value=''/></div>
+                <div class='init_label'><label for="newpass2">New pass phrase (again):</label></div>
+                <div class='init_input'><input type='password' id='newpass2' name='newpass2' value=''/></div>
+                <div class='init_button'><input type='button' id='do_reencrypt' value="Change master pass phrase"/></div>
+            </div>
+            <div class='buttons clear'>
+                <input type='button' id='reencrypt_button' value='Change master pass phrase'/>
+            </div>
+            <div class='buttons clear'>
                 <input type='button' id='unlock_button' value='Manual unlock'/>
                 <input type='button' id='sync_button' value='Manual sync'/>
             </div>
